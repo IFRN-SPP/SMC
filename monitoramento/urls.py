@@ -27,6 +27,7 @@ from monitoramento.views import (
     editar_localidade, 
     excluir_localidade,
     resolver_alerta,
+    relatorios,
 )
 
 urlpatterns = [
@@ -57,4 +58,5 @@ urlpatterns = [
     path('localidades/<int:id>/editar/', editar_localidade, name='editar_localidade'),
     path('localidades/<int:id>/excluir/', excluir_localidade, name='excluir_localidade'),
     path('alertas/<int:id>/resolver/', resolver_alerta, name='resolver_alerta',),
+    path('relatorios/', relatorios, name='relatorios'),
 ]

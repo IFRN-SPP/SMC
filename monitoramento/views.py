@@ -796,3 +796,71 @@ def resolver_alerta(request, id):
         alerta.save(update_fields=['resolvido', 'resolvido_em'])
 
     return redirect('lista_alertas')
+
+@login_required
+def relatorios(request):
+    total_cisternas = Cisterna.objects.count()
+    total_leituras = LeituraTelemetria.objects.count()
+
+    total_alertas_pendentes = Alerta.objects.filter(
+        resolvido=False
+    ).count()
+
+    total_municipios = (
+        Municipio.objects.filter(cisternas__isnull=False)
+        .distinct()
+        .count()
+    )
+
+    leituras = LeituraTelemetria.objects.select_related(
+        'cisterna',
+        'cisterna__municipio',
+    ).order_by('-data_hora')
+
+    municipio_id = request.GET.get('municipio', '').strip()
+
+    if municipio_id.isdigit():
+        leituras = leituras.filter(
+            cisterna__municipio_id=int(municipio_id)
+        )
+
+    cisterna_id = request.GET.get('cisterna', '').strip()
+
+    if cisterna_id.isdigit():
+        leituras = leituras.filter(
+            cisterna_id=int(cisterna_id)
+        )
+
+    data_inicio = request.GET.get('data_inicio', '').strip()
+    data_fim = request.GET.get('data_fim', '').strip()
+
+    if data_inicio:
+        leituras = leituras.filter(
+            data_hora__date__gte=data_inicio
+        )
+
+    if data_fim:
+        leituras = leituras.filter(
+            data_hora__date__lte=data_fim
+        )
+
+    contexto = {
+        'total_cisternas': total_cisternas,
+        'total_leituras': total_leituras,
+        'total_alertas_pendentes': total_alertas_pendentes,
+        'total_municipios': total_municipios,
+        'leituras': leituras[:100],
+        'municipios': Municipio.objects.order_by('nome'),
+        'cisternas': Cisterna.objects.order_by('identificacao'),
+        'municipio_selecionado': municipio_id,
+        'cisterna_selecionada': cisterna_id,
+        'data_inicio': data_inicio,
+        'data_fim': data_fim,
+        'total_resultados': leituras.count(),
+    }
+
+    return render(
+        request,
+        'monitoramento/relatorios.html',
+        contexto,
+    )

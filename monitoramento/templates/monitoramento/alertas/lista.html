@@ -200,11 +200,13 @@
             min-width: 0;
         }
 
+        
         .alertas-page {
             width: 100%;
-            max-width: 1200px;
-            margin: 0 auto;
+            max-width: none;
+            margin: 0;
         }
+
 
         .alertas-header {
             display: flex;
@@ -679,6 +681,11 @@
             <a href="{% url 'mapa' %}" class="menu-item">
                 <span>⌖</span>
                 <p>Mapa</p>
+            </a>
+
+            <a href="{% url 'relatorios' %}" class="menu-item">
+                <span>▤</span>
+                <p>Relatórios</p>
             </a>
         </nav>
 

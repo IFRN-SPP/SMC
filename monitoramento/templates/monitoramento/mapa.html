@@ -280,7 +280,48 @@
             #mapa {
                 height: 400px;
             }
+            
+        /* Organização da parte inferior da barra lateral */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
         }
+
+        .sidebar-bottom {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            margin-top: auto;
+            padding-top: 20px;
+            box-sizing: border-box;
+        }
+
+        .sidebar-bottom .user-box {
+            position: static;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+        }
+
+        .sidebar-bottom .user-info {
+            flex: 1;
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .sidebar-bottom .user-info strong,
+        .sidebar-bottom .user-info small {
+            display: block;
+        }
+
+        
+
+        
     </style>
 </head>
 
@@ -299,6 +340,7 @@
 
         <div class="menu-title">Menu principal</div>
 
+        
         <nav class="menu">
             <a href="{% url 'index' %}" class="menu-item">
                 <span>⌂</span>
@@ -325,9 +367,15 @@
                 <p>Alertas</p>
             </a>
 
-            <a href="{% url 'mapa' %}" class="menu-item active" aria-current="page">
+            <a href="{% url 'mapa' %}" class="menu-item active"
+               aria-current="page">
                 <span>⌖</span>
                 <p>Mapa</p>
+            </a>
+
+            <a href="{% url 'relatorios' %}" class="menu-item">
+                <span>▤</span>
+                <p>Relatórios</p>
             </a>
         </nav>
 
@@ -345,10 +393,31 @@
                 </div>
             </div>
 
-            <a href="{% url 'logout' %}" class="logout-link">
-                ↪ &nbsp; Sair
-            </a>
+            <form action="{% url 'logout' %}" method="post"
+                  class="sidebar-logout">
+                {% csrf_token %}
+                <button type="submit">
+                    ↪ &nbsp; Sair
+                </button>
+            </form>
         </div>
+    </aside>
+
+
+        <div class="sidebar-bottom">
+            <div class="user-box">
+                <div class="user-avatar">
+                    {{ request.user.username|first|upper }}
+                </div>
+
+                <div class="user-info">
+                    <strong>{{ request.user.get_full_name|default:request.user.username }}</strong>
+                    <small>Usuário conectado</small>
+                </div>
+                <a href="{% url 'logout' %}" class="logout-link">
+                    ↪ &nbsp; Sair
+                </a>
+            </div>
     </aside>
 
     <main class="content">

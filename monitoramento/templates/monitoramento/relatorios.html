@@ -1,0 +1,637 @@
+
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatórios | SMC</title>
+    <link rel="stylesheet" href="{% static 'monitoramento/css/style.css' %}">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: #f4f7fb;
+            color: #1e293b;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .topbar small {
+            color: #2585a5;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .topbar h1 {
+            margin-top: 7px;
+            color: #102a43;
+            font-size: 30px;
+        }
+
+        .topbar p {
+            margin-top: 7px;
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 18px;
+            margin-bottom: 25px;
+        }
+
+        .card {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            min-width: 0;
+            padding: 22px 18px;
+            background: white;
+            border: 1px solid #edf1f5;
+            border-radius: 15px;
+            box-shadow: 0 6px 22px rgba(15,42,67,.06);
+        }
+
+        .card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: #2563eb;
+            border-radius: 15px 0 0 15px;
+        }
+
+        .card.green::before {
+            background: #16a34a;
+        }
+
+        .card.yellow::before {
+            background: #eab308;
+        }
+
+        .card.purple::before {
+            background: #7c3aed;
+        }
+
+        .card-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 43px;
+            height: 43px;
+            border-radius: 12px;
+            background: #eff6ff;
+            font-size: 20px;
+        }
+
+        .green .card-icon {
+            background: #ecfdf5;
+        }
+
+        .yellow .card-icon {
+            background: #fffbeb;
+        }
+
+        .purple .card-icon {
+            background: #faf5ff;
+        }
+
+        .card-info {
+            min-width: 0;
+        }
+
+        .card-info span {
+            display: block;
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .card-info h2 {
+            margin-top: 7px;
+            color: #102a43;
+            font-size: 27px;
+            overflow-wrap: anywhere;
+        }
+
+        .panel {
+            min-width: 0;
+            padding: 25px;
+            margin-bottom: 22px;
+            background: white;
+            border: 1px solid #edf1f5;
+            border-radius: 16px;
+            box-shadow: 0 6px 22px rgba(15,42,67,.06);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .panel-header h2 {
+            color: #102a43;
+            font-size: 18px;
+        }
+
+        .panel-header p {
+            margin-top: 7px;
+            color: #64748b;
+            font-size: 12px;
+        }
+
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #334155;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            min-width: 0;
+            padding: 11px;
+            border: 1px solid #dbe3ec;
+            border-radius: 9px;
+            background: white;
+            color: #334155;
+            font-family: inherit;
+            font-size: 13px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: 2px solid #bfdbfe;
+            border-color: #2563eb;
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 11px 17px;
+            border: none;
+            border-radius: 9px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: #123f60;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0d304c;
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #334155;
+        }
+
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            white-space: nowrap;
+        }
+
+        thead {
+            background: #f8fafc;
+        }
+
+        th, td {
+            padding: 15px 13px;
+            border-bottom: 1px solid #edf2f7;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        th {
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        td {
+            color: #334155;
+        }
+
+        tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .nivel {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 20px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-weight: 600;
+        }
+
+        .empty {
+            padding: 30px;
+            color: #94a3b8;
+            text-align: center;
+        }
+
+        .results-info {
+            margin-top: 17px;
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        footer {
+            margin-top: 25px;
+            padding: 20px 10px;
+            border-top: 1px solid #e5edf4;
+            color: #94a3b8;
+            font-size: 11px;
+            text-align: center;
+        }
+
+        @media (max-width: 1200px) {
+            .cards {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .filters {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 850px) {
+            .sidebar {
+                position: static;
+                width: 100%;
+                height: auto;
+            }
+
+            .sidebar-bottom {
+                margin-top: 20px;
+            }
+
+            .content {
+                margin-left: 200px;
+                padding: 22px;
+            }
+        }
+
+        @media (max-width: 550px) {
+            .cards,
+            .filters {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .content {
+                padding: 15px;
+            }
+
+            .panel {
+                padding: 18px;
+            }
+
+            .topbar h1 {
+                font-size: 25px;
+            }
+            
+            .content {
+                width: calc(100% - 280px);
+                margin-left: 280px;
+                padding: 35px 25px;
+                overflow: visible;
+            }  
+
+            .content > * {
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <aside class="sidebar">
+
+        
+<div class="layout">
+    <aside class="sidebar">
+        <a href="{% url 'apresentacao' %}" class="logo"
+           style="text-decoration: none !important; color: inherit;">
+            <div class="logo-icon">💧</div>
+            <div class="logo-text">
+                <span>Sistema de Monitoramento</span>
+                <strong>SMC</strong>
+            </div>
+        </a>
+
+        <div class="menu-title">Menu principal</div>
+
+        <nav class="menu">
+            <a href="{% url 'index' %}" class="menu-item">
+                <span>⌂</span>
+                <p>Painel inicial</p>
+            </a>
+
+            <a href="{% url 'lista_usuarios' %}" class="menu-item">
+                <span>♙</span>
+                <p>Usuários</p>
+            </a>
+
+            <a href="{% url 'lista_cisternas' %}" class="menu-item">
+                <span>▣</span>
+                <p>Cisternas</p>
+            </a>
+
+            <a href="{% url 'monitoramento' %}" class="menu-item">
+                <span>◉</span>
+                <p>Monitoramento</p>
+            </a>
+
+            <a href="{% url 'lista_alertas' %}" class="menu-item">
+                <span>⚑</span>
+                <p>Alertas</p>
+            </a>
+
+            <a href="{% url 'mapa' %}" class="menu-item">
+                <span>⌖</span>
+                <p>Mapa</p>
+            </a>
+
+            <a href="{% url 'relatorios' %}"
+               class="menu-item active" aria-current="page">
+                <span>▤</span>
+                <p>Relatórios</p>
+            </a>
+        </nav>
+
+        <div class="sidebar-bottom">
+            <div class="user-box">
+                <div class="user-avatar">
+                    {{ request.user.username|first|upper }}
+                </div>
+
+                <div class="user-info">
+                    <strong>
+                        {{ request.user.get_full_name|default:request.user.username }}
+                    </strong>
+                    <small>Usuário conectado</small>
+                </div>
+            </div>
+        </div>
+        <a href="{% url 'logout' %}" class="logout-link">
+            ↪ &nbsp; Sair
+        </a>
+    </aside>
+
+    <form action="{% url 'logout' %}" method="post" class="sidebar-logout">
+        {% csrf_token %}
+        <button type="submit">↪ &nbsp; Sair</button>
+    </form>
+</div>
+    </aside>
+
+<!-- Conteúdo principal -->
+    <main class="content">
+
+        <header class="topbar">
+            <div>
+                <small>SMC / Relatórios</small>
+                <h1>Relatórios</h1>
+                <p>
+                    Consulte os indicadores e o histórico de leituras das cisternas.
+                </p>
+            </div>
+        </header>
+
+        <!-- Indicadores -->
+        <section class="cards">
+
+            <article class="card">
+                <div class="card-icon">▣</div>
+                <div class="card-info">
+                    <span>Total de cisternas</span>
+                    <h2>{{ total_cisternas|default:0 }}</h2>
+                </div>
+            </article>
+
+            <article class="card green">
+                <div class="card-icon">◷</div>
+                <div class="card-info">
+                    <span>Total de leituras</span>
+                    <h2>{{ total_leituras|default:0 }}</h2>
+                </div>
+            </article>
+
+            <article class="card yellow">
+                <div class="card-icon">⚑</div>
+                <div class="card-info">
+                    <span>Alertas pendentes</span>
+                    <h2>{{ total_alertas_pendentes|default:0 }}</h2>
+                </div>
+            </article>
+
+            <article class="card purple">
+                <div class="card-icon">⌖</div>
+                <div class="card-info">
+                    <span>Municípios atendidos</span>
+                    <h2>{{ total_municipios|default:0 }}</h2>
+                </div>
+            </article>
+
+        </section>
+
+        <!-- Filtros -->
+        <section class="panel">
+
+            <div class="panel-header">
+                <div>
+                    <h2>Filtrar relatório</h2>
+                    <p>Selecione os critérios para consultar as leituras.</p>
+                </div>
+            </div>
+
+            <form method="GET">
+                <div class="filters">
+
+                    <div class="form-group">
+                        <label for="data_inicio">Data inicial</label>
+                        <input
+                            type="date"
+                            id="data_inicio"
+                            name="data_inicio"
+                            value="{{ data_inicio }}"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="data_fim">Data final</label>
+                        <input
+                            type="date"
+                            id="data_fim"
+                            name="data_fim"
+                            value="{{ data_fim }}"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="municipio">Município</label>
+                        <select id="municipio" name="municipio">
+                            <option value="">Todos os municípios</option>
+
+                            {% for municipio in municipios %}
+                                <option
+                                    value="{{ municipio.id }}"
+                                    {% if municipio_selecionado == municipio.id|stringformat:"s" %}selected{% endif %}
+                                >
+                                    {{ municipio.nome }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cisterna">Cisterna</label>
+                        <select id="cisterna" name="cisterna">
+                            <option value="">Todas as cisternas</option>
+
+                            {% for cisterna in cisternas %}
+                                <option
+                                    value="{{ cisterna.id }}"
+                                    {% if cisterna_selecionada == cisterna.id|stringformat:"s" %}selected{% endif %}
+                                >
+                                    {{ cisterna.identificacao }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                </div>
+
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary">
+                        Filtrar resultados
+                    </button>
+
+                    <a href="{% url 'relatorios' %}" class="btn btn-secondary">
+                        Limpar filtros
+                    </a>
+                </div>
+            </form>
+
+        </section>
+
+        <!-- Histórico de leituras -->
+        <section class="panel">
+
+            <div class="panel-header">
+                <div>
+                    <h2>Histórico de leituras</h2>
+                    <p>Registros de monitoramento das cisternas.</p>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data e hora</th>
+                            <th>Cisterna</th>
+                            <th>Município</th>
+                            <th>Nível de água</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for leitura in leituras %}
+                            <tr>
+                                <td>
+                                    {{ leitura.data_hora|date:"d/m/Y H:i" }}
+                                </td>
+
+                                <td>
+                                    {{ leitura.cisterna.identificacao }}
+                                </td>
+
+                                <td>
+                                    {{ leitura.cisterna.municipio.nome|default:"Não informado" }}
+                                </td>
+
+                                <td>
+                                    <span class="nivel">
+                                        {{ leitura.nivel|floatformat:1 }}%
+                                    </span>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="4" class="empty">
+                                    Nenhuma leitura encontrada para os filtros selecionados.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <p class="results-info">
+                Exibindo até 100 leituras.
+                Total encontrado: {{ total_resultados|default:0 }}.
+            </p>
+
+        </section>
+
+        <footer>
+            SMC — Sistema de Monitoramento do Nível de Água em Cisternas
+        </footer>
+
+    </main>
+
+</body>
+</html>
