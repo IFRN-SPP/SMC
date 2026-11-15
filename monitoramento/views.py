@@ -53,6 +53,67 @@ def somente_perfis(*perfis):
     return decorator
 
 
+def ultima_leitura_da_cisterna(cisterna_id):
+    return (
+        LeituraTelemetria.objects
+        .filter(cisterna_id=cisterna_id)
+        .order_by('-data_hora', '-pk')
+        .first()
+    )
+
+
+def montar_sensores(leitura):
+    """Lista os sensores de uma leitura (valor None quando não há dado)."""
+    return [
+        {
+            'chave': campo,
+            'curto': faixa['curto'],
+            'rotulo': faixa['rotulo'],
+            'unidade': faixa['unidade'],
+            'casas': faixa['casas'],
+            'valor': getattr(leitura, campo) if leitura else None,
+        }
+        for campo, faixa in LeituraTelemetria.CAMPOS_SENSORES.items()
+    ]
+
+
+def resumir_sensores(leituras):
+    """Resume as últimas leituras de todas as cisternas, sensor a sensor.
+
+    Usa a média, exceto na bateria, onde o menor valor é mais útil: uma média
+    esconderia a bateria de uma cisterna que está acabando.
+    """
+    resumo = []
+
+    for campo, faixa in LeituraTelemetria.CAMPOS_SENSORES.items():
+        valores = [
+            getattr(leitura, campo)
+            for leitura in leituras
+            if getattr(leitura, campo) is not None
+        ]
+
+        usa_menor = campo == 'tensao_bateria'
+
+        if not valores:
+            valor = None
+        elif usa_menor:
+            valor = min(valores)
+        else:
+            valor = sum(valores) / len(valores)
+
+        resumo.append({
+            'chave': campo,
+            'rotulo': faixa['rotulo'],
+            'unidade': faixa['unidade'],
+            'casas': faixa['casas'],
+            'valor': valor,
+            'n': len(valores),
+            'tipo': 'menor entre' if usa_menor else 'média de',
+        })
+
+    return resumo
+
+
 @login_required
 def index(request):
     total_usuarios = get_user_model().objects.count()
@@ -70,7 +131,20 @@ def index(request):
         .order_by('-data_hora')[:5]
     )
 
+    ultimas = [
+        leitura
+        for leitura in (
+            ultima_leitura_da_cisterna(pk)
+            for pk in Cisterna.objects.values_list('pk', flat=True)
+        )
+        if leitura
+    ]
+
     contexto = {
+        'sensores_resumo': resumir_sensores(ultimas),
+        'ultima_atualizacao': max(
+            (leitura.data_hora for leitura in ultimas), default=None
+        ),
         'total_usuarios': total_usuarios,
         'total_cisternas': total_cisternas,
         'total_participantes': total_participantes,
@@ -206,7 +280,7 @@ def criar_usuario(request):
         'monitoramento/usuarios/form.html',
         {
             'form': form,
-            'titulo': 'Cadastrar usu├írio',
+            'titulo': 'Cadastrar usuário',
         },
     )
 
@@ -228,7 +302,7 @@ def editar_usuario(request, id):
             instance=usuario,
         )
 
-        # Permite editar o usu├írio sem informar um munic├¡pio.
+        # Permite editar o usuário sem informar um município.
         if 'municipio' in form.fields:
             form.fields['municipio'].required = False
 
@@ -248,7 +322,7 @@ def editar_usuario(request, id):
 
             municipio = form.cleaned_data.get('municipio')
 
-            # Mant├®m o munic├¡pio anterior se nenhum novo for informado.
+            # Mantém o município anterior se nenhum novo for informado.
             if municipio is None:
                 perfil_atual = PerfilUsuario.objects.filter(
                     usuario=usuario,
@@ -266,7 +340,7 @@ def editar_usuario(request, id):
 
             return redirect('lista_usuarios')
 
-        print('ERROS DO FORMUL├üRIO DE EDI├ç├âO:', form.errors)
+        print('ERROS DO FORMULÁRIO DE EDIÇÃO:', form.errors)
         print('DADOS RECEBIDOS:', request.POST)
 
     else:
@@ -277,7 +351,7 @@ def editar_usuario(request, id):
         'monitoramento/usuarios/editar.html',
         {
             'form': form,
-            'titulo': 'Editar usu├írio',
+            'titulo': 'Editar usuário',
         },
     )
 
@@ -309,9 +383,9 @@ def excluir_usuario(request, id):
         'monitoramento/confirmar_exclusao_generica.html',
         {
             'objeto': usuario,
-            'titulo': 'Excluir usu├írio',
+            'titulo': 'Excluir usuário',
             'voltar_url': 'lista_usuarios',
-            'tipo': 'usu├írio',
+            'tipo': 'usuário',
         },
     )
 
@@ -327,19 +401,9 @@ def monitoramento(request):
         ).all()
     )
 
-    ultimas_leituras = (
-        LeituraTelemetria.objects
-        .order_by("-data_hora", "-pk")
-    )
-
-    leituras_por_cisterna = {}
-
-    for leitura in ultimas_leituras:
-        if leitura.cisterna_id not in leituras_por_cisterna:
-            leituras_por_cisterna[leitura.cisterna_id] = leitura
-
     for cisterna in cisternas:
-        cisterna.ultima_leitura = leituras_por_cisterna.get(cisterna.id)
+        cisterna.ultima_leitura = ultima_leitura_da_cisterna(cisterna.id)
+        cisterna.sensores = montar_sensores(cisterna.ultima_leitura)
 
         if cisterna.ultima_leitura:
             nivel = cisterna.ultima_leitura.nivel
@@ -359,10 +423,15 @@ def monitoramento(request):
 
     total_leituras = LeituraTelemetria.objects.count()
 
+    total_atencao = sum(
+        1 for c in cisternas if c.status_classe in ("atencao", "critico")
+    )
+
     contexto = {
         "cisternas": cisternas,
         "total_monitoradas": len(cisternas),
         "total_leituras": total_leituras,
+        "total_requer_atencao": total_atencao,
     }
 
     return render(
@@ -447,7 +516,7 @@ def criar_municipio(request):
         'monitoramento/municipios/form.html',
         {
             'form': form,
-            'titulo': 'Cadastrar munic├¡pio',
+            'titulo': 'Cadastrar município',
         },
     )
 
@@ -473,7 +542,7 @@ def editar_municipio(request, id):
         'monitoramento/municipios/form.html',
         {
             'form': form,
-            'titulo': 'Editar munic├¡pio',
+            'titulo': 'Editar município',
         },
     )
 
@@ -492,9 +561,9 @@ def excluir_municipio(request, id):
         'monitoramento/confirmar_exclusao_generica.html',
         {
             'objeto': municipio,
-            'titulo': 'Excluir munic├¡pio',
+            'titulo': 'Excluir município',
             'voltar_url': 'lista_municipios',
-            'tipo': 'munic├¡pio',
+            'tipo': 'município',
             'bloqueada': bloqueada,
         },
         status=400 if bloqueada else 200,
@@ -678,13 +747,13 @@ def receber_leitura(request):
 
     if not token_configurado or token_recebido != token_configurado:
         return JsonResponse(
-            {'erro': 'Dispositivo n├úo autenticado.'},
+            {'erro': 'Dispositivo não autenticado.'},
             status=403,
         )
 
     if request.method != 'POST':
         return JsonResponse(
-            {'erro': 'M├®todo n├úo permitido.'},
+            {'erro': 'Método não permitido.'},
             status=405,
         )
 
@@ -695,15 +764,40 @@ def receber_leitura(request):
 
         if not 0 <= nivel <= 100:
             return JsonResponse(
-                {'erro': 'O n├¡vel deve estar entre 0 e 100.'},
+                {'erro': 'O nível deve estar entre 0 e 100.'},
                 status=400,
             )
 
         if not identificacao:
             return JsonResponse(
-                {'erro': 'Identifica├º├úo do dispositivo n├úo informada.'},
+                {'erro': 'Identificação do dispositivo não informada.'},
                 status=400,
             )
+
+        # Sensores opcionais: o campo ausente ou vazio é ignorado.
+        sensores = {}
+
+        for campo, faixa in LeituraTelemetria.CAMPOS_SENSORES.items():
+            texto = (dados.get(campo) or '').strip().replace(',', '.')
+
+            if not texto:
+                continue
+
+            try:
+                valor = float(texto)
+            except ValueError:
+                return JsonResponse(
+                    {'erro': f"O valor de {campo} é inválido."},
+                    status=400,
+                )
+
+            if not LeituraTelemetria.valor_sensor_valido(campo, valor):
+                return JsonResponse(
+                    {'erro': f"{faixa['rotulo']} fora da faixa permitida."},
+                    status=400,
+                )
+
+            sensores[campo] = valor
 
         dispositivo = (
             Dispositivo.objects
@@ -717,7 +811,7 @@ def receber_leitura(request):
 
         if not dispositivo:
             return JsonResponse(
-                {'erro': 'Dispositivo n├úo encontrado ou est├í inativo.'},
+                {'erro': 'Dispositivo não encontrado ou está inativo.'},
                 status=404,
             )
 
@@ -726,6 +820,7 @@ def receber_leitura(request):
             dispositivo=dispositivo,
             nivel=nivel,
             data_hora=timezone.now(),
+            **sensores,
         )
 
         return JsonResponse(
@@ -735,13 +830,14 @@ def receber_leitura(request):
                 'dispositivo': dispositivo.identificacao,
                 'cisterna': dispositivo.cisterna.identificacao,
                 'nivel': leitura.nivel,
+                'sensores': sensores,
             },
             status=201,
         )
 
     except (TypeError, ValueError):
         return JsonResponse(
-            {'erro': 'O n├¡vel informado ├® inv├ílido.'},
+            {'erro': 'O nível informado é inválido.'},
             status=400,
         )
 
@@ -796,3 +892,71 @@ def resolver_alerta(request, id):
         alerta.save(update_fields=['resolvido', 'resolvido_em'])
 
     return redirect('lista_alertas')
+
+@login_required
+def relatorios(request):
+    total_cisternas = Cisterna.objects.count()
+    total_leituras = LeituraTelemetria.objects.count()
+
+    total_alertas_pendentes = Alerta.objects.filter(
+        resolvido=False
+    ).count()
+
+    total_municipios = (
+        Municipio.objects.filter(cisternas__isnull=False)
+        .distinct()
+        .count()
+    )
+
+    leituras = LeituraTelemetria.objects.select_related(
+        'cisterna',
+        'cisterna__municipio',
+    ).order_by('-data_hora')
+
+    municipio_id = request.GET.get('municipio', '').strip()
+
+    if municipio_id.isdigit():
+        leituras = leituras.filter(
+            cisterna__municipio_id=int(municipio_id)
+        )
+
+    cisterna_id = request.GET.get('cisterna', '').strip()
+
+    if cisterna_id.isdigit():
+        leituras = leituras.filter(
+            cisterna_id=int(cisterna_id)
+        )
+
+    data_inicio = request.GET.get('data_inicio', '').strip()
+    data_fim = request.GET.get('data_fim', '').strip()
+
+    if data_inicio:
+        leituras = leituras.filter(
+            data_hora__date__gte=data_inicio
+        )
+
+    if data_fim:
+        leituras = leituras.filter(
+            data_hora__date__lte=data_fim
+        )
+
+    contexto = {
+        'total_cisternas': total_cisternas,
+        'total_leituras': total_leituras,
+        'total_alertas_pendentes': total_alertas_pendentes,
+        'total_municipios': total_municipios,
+        'leituras': leituras[:100],
+        'municipios': Municipio.objects.order_by('nome'),
+        'cisternas': Cisterna.objects.order_by('identificacao'),
+        'municipio_selecionado': municipio_id,
+        'cisterna_selecionada': cisterna_id,
+        'data_inicio': data_inicio,
+        'data_fim': data_fim,
+        'total_resultados': leituras.count(),
+    }
+
+    return render(
+        request,
+        'monitoramento/relatorios.html',
+        contexto,
+    )
