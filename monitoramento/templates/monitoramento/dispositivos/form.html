@@ -105,7 +105,7 @@
 
         <section class="panel">
 
-            <form method="post">
+            <form method="post" data-ajax-url="{% if form.instance.pk %}{% url 'ajax_editar_dispositivo' form.instance.pk %}{% else %}{% url 'ajax_criar_dispositivo' %}{% endif %}" data-redirect-url="{% url 'lista_dispositivos' %}">
 
                 {% csrf_token %}
 
@@ -170,6 +170,7 @@
 
 </div>
 
+<script src="{% static 'monitoramento/js/crud_ajax.js' %}"></script>
 </body>
 
 </html>
