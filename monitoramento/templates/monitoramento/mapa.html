@@ -287,8 +287,6 @@
             flex-direction: column;
             box-sizing: border-box;
         }
-<<<<<<< HEAD
-
         .sidebar-bottom {
             display: flex;
             flex-direction: column;
@@ -320,11 +318,7 @@
             display: block;
         }
 
-        
-
-        
-=======
-            /* Ícones do menu lateral (SVG) */
+        /* Ícones do menu lateral (SVG) */
         .menu-item span {
             display: flex;
             align-items: center;
@@ -339,7 +333,6 @@
         .menu-item.active span svg {
             opacity: 1;
         }
->>>>>>> feature/sensores-leituras
     </style>
 </head>
 
@@ -385,19 +378,13 @@
                 <p>Alertas</p>
             </a>
 
-<<<<<<< HEAD
-            <a href="{% url 'mapa' %}" class="menu-item active"
-               aria-current="page">
-                <span>⌖</span>
-=======
             <a href="{% url 'mapa' %}" class="menu-item active" aria-current="page">
                 <span><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15"/><path d="M15 6v15"/></svg></span>
->>>>>>> feature/sensores-leituras
                 <p>Mapa</p>
             </a>
 
             <a href="{% url 'relatorios' %}" class="menu-item">
-                <span>▤</span>
+                <span><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></span>
                 <p>Relatórios</p>
             </a>
         </nav>
