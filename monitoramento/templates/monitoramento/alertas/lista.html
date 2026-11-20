@@ -577,7 +577,7 @@
             }
 
             .sidebar-logout button::after {
-                content: "↪";
+                content: "";
                 font-size: 18px;
             }
         }
@@ -718,7 +718,7 @@
 
             <form action="{% url 'logout' %}" method="post" class="sidebar-logout">
                 {% csrf_token %}
-                <button type="submit">↪ &nbsp; Sair</button>
+                <button type="submit"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg> &nbsp; Sair</button>
             </form>
         </div>
     </aside>
@@ -753,7 +753,7 @@
                 >
 
                 <button type="submit" class="btn btn-primary">
-                    ⌕ Buscar
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Buscar
                 </button>
 
                 {% if busca %}
@@ -782,9 +782,9 @@
 
                             <div class="alerta-icone {% if alerta.resolvido %}resolvido-icone{% elif alerta.tipo == 'critico' %}critico{% endif %}">
                                 {% if alerta.resolvido %}
-                                    ✓
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
                                 {% else %}
-                                    ⚠
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
                                 {% endif %}
                             </div>
 
@@ -854,7 +854,7 @@
                                 >
                                     {% csrf_token %}
                                     <button type="button" class="ajax-resolver-alerta" data-url="{% url 'ajax_resolver_alerta' alerta.id %}">
-                                        ✓ Marcar como resolvido
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px"><path d="M20 6 9 17l-5-5"/></svg> Marcar como resolvido
                                     </button>
                                 </form>
                             {% endif %}
