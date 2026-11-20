@@ -1,4 +1,3 @@
-
 {% load static %}
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -586,10 +585,167 @@
                 align-items: flex-start;
             }
         }
+        /* Sensores (temperatura, umidade, qualidade da água e energia) */
+
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .sensor {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            padding: 10px 12px;
+            background: #f8fafc;
+            border: 1px solid #eef2f7;
+            border-radius: 12px;
+        }
+
+        .sensor-icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        .sensor-text {
+            min-width: 0;
+        }
+
+        .sensor-text p {
+            margin: 0 0 2px;
+            overflow: hidden;
+            color: #64748b;
+            font-size: 11px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .sensor-text strong {
+            color: #123f60;
+            font-size: 15px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .sensor-text strong small {
+            margin-left: 3px;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .sensor.sem-dado .sensor-text strong {
+            color: #94a3b8;
+            font-weight: 600;
+        }
+
+        /* Cor de cada ícone */
+        .sensor-icon.i-temperatura_agua { color: #0284c7; }
+        .sensor-icon.i-temperatura_ar   { color: #0d9488; }
+        .sensor-icon.i-umidade_ar       { color: #2563eb; }
+        .sensor-icon.i-qualidade_agua_ppm { color: #7c3aed; }
+        .sensor-icon.i-tensao_bateria   { color: #16a34a; }
+        .sensor-icon.i-tensao_placa_solar { color: #d97706; }
+
+        /* Versão em destaque, usada no painel inicial */
+        .sensor-grid.resumo {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            margin-bottom: 30px;
+        }
+
+        .sensor-grid.resumo .sensor {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 18px;
+            background: #ffffff;
+            border-color: #e8edf3;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(15, 42, 67, .05);
+        }
+
+        .sensor-grid.resumo .sensor-text { width: 100%; }
+
+        .sensor-grid.resumo .sensor-text p {
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+
+        .sensor-grid.resumo .sensor-text strong { font-size: 24px; }
+
+        .sensor-grid.resumo .sensor-text strong small { font-size: 13px; }
+
+        .sensor-grid.resumo .sensor-caption {
+            display: block;
+            margin-top: 6px;
+            color: #64748b;
+            font-size: 11px;
+        }
+
+        .sensor-note {
+            margin: -18px 0 22px;
+            color: #64748b;
+            font-size: 12px;
+        }
+
+        @media (max-width: 1500px) {
+            .sensor-grid.resumo { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+
+        @media (max-width: 600px) {
+            .sensor-grid,
+            .sensor-grid.resumo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+            .sensor { gap: 8px; padding: 9px 10px; }
+
+            .sensor-icon { width: 18px; height: 18px; }
+
+            /* Em telas estreitas o rótulo quebra linha em vez de ser cortado. */
+            .sensor-text p {
+                overflow: visible;
+                line-height: 1.25;
+                white-space: normal;
+            }
+        }
+            /* Ícones do menu lateral (SVG) */
+        .menu-item span {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .menu-item span svg {
+            width: 20px;
+            height: 20px;
+            display: block;
+            opacity: .92;
+        }
+        .menu-item.active span svg {
+            opacity: 1;
+        }
+            /* Ícones dos cards (SVG) */
+        .card-icon { color: #2563eb; }
+        .card.green .card-icon { color: #16a34a; }
+        .card.yellow .card-icon { color: #d97706; }
+        .card.purple .card-icon { color: #7c3aed; }
+        .card-icon svg { width: 24px; height: 24px; display: block; }
     </style>
 </head>
 
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+        <symbol id="i-temperatura_agua" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></symbol>
+        <symbol id="i-temperatura_ar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/></symbol>
+        <symbol id="i-umidade_ar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></symbol>
+        <symbol id="i-qualidade_agua_ppm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.5a2 2 0 0 1-.2.9L4.7 20.5a1 1 0 0 0 .9 1.5h12.8a1 1 0 0 0 .9-1.5l-5.1-10.1a2 2 0 0 1-.2-.9V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></symbol>
+        <symbol id="i-tensao_bateria" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="16" height="10" rx="2"/><path d="M22 11v2M6 11v2M10 11v2"/></symbol>
+        <symbol id="i-tensao_placa_solar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/></symbol>
+    </defs>
+</svg>
 <div class="layout">
 
     <aside class="sidebar">
@@ -606,32 +762,32 @@
 
         <nav class="menu">
             <a href="{% url 'index' %}" class="menu-item active">
-                <span>⌂</span>
+                <span><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-6h6v6"/></svg></span>
                 <p>Painel inicial</p>
             </a>
 
             <a href="{% url 'lista_usuarios' %}" class="menu-item">
-                <span>♙</span>
+                <span><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
                 <p>Usuários</p>
             </a>
 
             <a href="{% url 'lista_cisternas' %}" class="menu-item">
-                <span>▣</span>
+                <span><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg></span>
                 <p>Cisternas</p>
             </a>
 
             <a href="{% url 'monitoramento' %}" class="menu-item">
-                <span>◉</span>
+                <span><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
                 <p>Monitoramento</p>
             </a>
 
             <a href="{% url 'lista_alertas' %}" class="menu-item">
-                <span>⚑</span>
+                <span><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
                 <p>Alertas</p>
             </a>
 
             <a href="{% url 'mapa' %}" class="menu-item">
-                <span>⌖</span>
+                <span><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15"/><path d="M15 6v15"/></svg></span>
                 <p>Mapa</p>
             </a>
         
@@ -682,7 +838,7 @@
         <section class="cards">
 
             <article class="card">
-                <div class="card-icon">♙</div>
+                <div class="card-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
                 <div class="card-info">
                     <span>Usuários cadastrados</span>
                     <h2>{{ total_usuarios|default:0 }}</h2>
@@ -691,7 +847,7 @@
             </article>
 
             <article class="card green">
-                <div class="card-icon">▣</div>
+                <div class="card-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg></div>
                 <div class="card-info">
                     <span>Cisternas</span>
                     <h2>{{ total_cisternas|default:0 }}</h2>
@@ -700,7 +856,7 @@
             </article>
 
             <article class="card purple">
-                <div class="card-icon">♧</div>
+                <div class="card-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg></div>
                 <div class="card-info">
                     <span>Participantes</span>
                     <h2>{{ total_participantes|default:0 }}</h2>
@@ -709,7 +865,7 @@
             </article>
 
             <article class="card yellow">
-                <div class="card-icon">⚑</div>
+                <div class="card-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
                 <div class="card-info">
                     <span>Alertas</span>
                     <h2>{{ total_alertas|default:0 }}</h2>
@@ -718,7 +874,7 @@
             </article>
 
             <article class="card green">
-                <div class="card-icon">⌖</div>
+                <div class="card-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
                 <div class="card-info">
                     <span>Localidades</span>
                     <h2>{{ total_localidades|default:0 }}</h2>
@@ -727,7 +883,7 @@
             </article>
 
             <article class="card">
-                <div class="card-icon">◷</div>
+                <div class="card-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
                 <div class="card-info">
                     <span>Leituras realizadas</span>
                     <h2>{{ total_leituras|default:0 }}</h2>
@@ -736,6 +892,32 @@
             </article>
 
         </section>
+
+        <h2 class="section-title">Sensores das cisternas</h2>
+
+        <section class="sensor-grid resumo" aria-label="Resumo dos sensores">
+            {% for s in sensores_resumo %}
+                <div class="sensor{% if s.valor is None %} sem-dado{% endif %}">
+                    <svg class="sensor-icon i-{{ s.chave }}" aria-hidden="true"><use href="#i-{{ s.chave }}"></use></svg>
+                    <div class="sensor-text">
+                        <p>{{ s.rotulo }}</p>
+                        <strong>
+                            {% if s.valor is not None %}{{ s.valor|floatformat:s.casas }}<small>{{ s.unidade }}</small>{% else %}--{% endif %}
+                        </strong>
+                        <span class="sensor-caption">
+                            {% if s.valor is None %}Sem dados{% else %}{{ s.tipo|capfirst }} {{ s.n }} cisterna{{ s.n|pluralize }}{% endif %}
+                        </span>
+                    </div>
+                </div>
+            {% endfor %}
+        </section>
+
+        {% if ultima_atualizacao %}
+            <p class="sensor-note">
+                Com base na última leitura de cada cisterna. Atualizado em
+                {{ ultima_atualizacao|date:"d/m/Y H:i" }}.
+            </p>
+        {% endif %}
 
         <section class="grid">
 

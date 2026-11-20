@@ -1,4 +1,4 @@
-﻿from .models import Cisterna, LeituraTelemetria
+from .models import Cisterna, LeituraTelemetria
 from functools import wraps
 from django.contrib.auth import get_user_model
 from django.conf import settings
@@ -15,6 +15,7 @@ from .forms import (
     DispositivoForm,
     LocalidadeForm,
     MunicipioForm,
+    ParticipanteForm,
     UsuarioForm,
     UsuarioEdicaoForm,
 )
@@ -53,6 +54,67 @@ def somente_perfis(*perfis):
     return decorator
 
 
+def ultima_leitura_da_cisterna(cisterna_id):
+    return (
+        LeituraTelemetria.objects
+        .filter(cisterna_id=cisterna_id)
+        .order_by('-data_hora', '-pk')
+        .first()
+    )
+
+
+def montar_sensores(leitura):
+    """Lista os sensores de uma leitura (valor None quando não há dado)."""
+    return [
+        {
+            'chave': campo,
+            'curto': faixa['curto'],
+            'rotulo': faixa['rotulo'],
+            'unidade': faixa['unidade'],
+            'casas': faixa['casas'],
+            'valor': getattr(leitura, campo) if leitura else None,
+        }
+        for campo, faixa in LeituraTelemetria.CAMPOS_SENSORES.items()
+    ]
+
+
+def resumir_sensores(leituras):
+    """Resume as últimas leituras de todas as cisternas, sensor a sensor.
+
+    Usa a média, exceto na bateria, onde o menor valor é mais útil: uma média
+    esconderia a bateria de uma cisterna que está acabando.
+    """
+    resumo = []
+
+    for campo, faixa in LeituraTelemetria.CAMPOS_SENSORES.items():
+        valores = [
+            getattr(leitura, campo)
+            for leitura in leituras
+            if getattr(leitura, campo) is not None
+        ]
+
+        usa_menor = campo == 'tensao_bateria'
+
+        if not valores:
+            valor = None
+        elif usa_menor:
+            valor = min(valores)
+        else:
+            valor = sum(valores) / len(valores)
+
+        resumo.append({
+            'chave': campo,
+            'rotulo': faixa['rotulo'],
+            'unidade': faixa['unidade'],
+            'casas': faixa['casas'],
+            'valor': valor,
+            'n': len(valores),
+            'tipo': 'menor entre' if usa_menor else 'média de',
+        })
+
+    return resumo
+
+
 @login_required
 def index(request):
     total_usuarios = get_user_model().objects.count()
@@ -70,7 +132,20 @@ def index(request):
         .order_by('-data_hora')[:5]
     )
 
+    ultimas = [
+        leitura
+        for leitura in (
+            ultima_leitura_da_cisterna(pk)
+            for pk in Cisterna.objects.values_list('pk', flat=True)
+        )
+        if leitura
+    ]
+
     contexto = {
+        'sensores_resumo': resumir_sensores(ultimas),
+        'ultima_atualizacao': max(
+            (leitura.data_hora for leitura in ultimas), default=None
+        ),
         'total_usuarios': total_usuarios,
         'total_cisternas': total_cisternas,
         'total_participantes': total_participantes,
@@ -153,6 +228,13 @@ def excluir_cisterna(request, id):
 
     if request.method == 'POST':
         cisterna.delete()
+
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'sucesso': True,
+                'mensagem': 'Cisterna excluída com sucesso!'
+            })
+
         return redirect('lista_cisternas')
 
     return render(
@@ -206,7 +288,7 @@ def criar_usuario(request):
         'monitoramento/usuarios/form.html',
         {
             'form': form,
-            'titulo': 'Cadastrar usu├írio',
+            'titulo': 'Cadastrar usuário',
         },
     )
 
@@ -228,7 +310,7 @@ def editar_usuario(request, id):
             instance=usuario,
         )
 
-        # Permite editar o usu├írio sem informar um munic├¡pio.
+        # Permite editar o usuário sem informar um município.
         if 'municipio' in form.fields:
             form.fields['municipio'].required = False
 
@@ -248,7 +330,7 @@ def editar_usuario(request, id):
 
             municipio = form.cleaned_data.get('municipio')
 
-            # Mant├®m o munic├¡pio anterior se nenhum novo for informado.
+            # Mantém o município anterior se nenhum novo for informado.
             if municipio is None:
                 perfil_atual = PerfilUsuario.objects.filter(
                     usuario=usuario,
@@ -266,7 +348,7 @@ def editar_usuario(request, id):
 
             return redirect('lista_usuarios')
 
-        print('ERROS DO FORMUL├üRIO DE EDI├ç├âO:', form.errors)
+        print('ERROS DO FORMULÁRIO DE EDIÇÃO:', form.errors)
         print('DADOS RECEBIDOS:', request.POST)
 
     else:
@@ -277,7 +359,8 @@ def editar_usuario(request, id):
         'monitoramento/usuarios/editar.html',
         {
             'form': form,
-            'titulo': 'Editar usu├írio',
+            'titulo': 'Editar usuário',
+            'usuario': usuario,
         },
     )
 
@@ -309,9 +392,9 @@ def excluir_usuario(request, id):
         'monitoramento/confirmar_exclusao_generica.html',
         {
             'objeto': usuario,
-            'titulo': 'Excluir usu├írio',
+            'titulo': 'Excluir usuário',
             'voltar_url': 'lista_usuarios',
-            'tipo': 'usu├írio',
+            'tipo': 'usuário',
         },
     )
 
@@ -327,19 +410,9 @@ def monitoramento(request):
         ).all()
     )
 
-    ultimas_leituras = (
-        LeituraTelemetria.objects
-        .order_by("-data_hora", "-pk")
-    )
-
-    leituras_por_cisterna = {}
-
-    for leitura in ultimas_leituras:
-        if leitura.cisterna_id not in leituras_por_cisterna:
-            leituras_por_cisterna[leitura.cisterna_id] = leitura
-
     for cisterna in cisternas:
-        cisterna.ultima_leitura = leituras_por_cisterna.get(cisterna.id)
+        cisterna.ultima_leitura = ultima_leitura_da_cisterna(cisterna.id)
+        cisterna.sensores = montar_sensores(cisterna.ultima_leitura)
 
         if cisterna.ultima_leitura:
             nivel = cisterna.ultima_leitura.nivel
@@ -359,10 +432,15 @@ def monitoramento(request):
 
     total_leituras = LeituraTelemetria.objects.count()
 
+    total_atencao = sum(
+        1 for c in cisternas if c.status_classe in ("atencao", "critico")
+    )
+
     contexto = {
         "cisternas": cisternas,
         "total_monitoradas": len(cisternas),
         "total_leituras": total_leituras,
+        "total_requer_atencao": total_atencao,
     }
 
     return render(
@@ -447,7 +525,8 @@ def criar_municipio(request):
         'monitoramento/municipios/form.html',
         {
             'form': form,
-            'titulo': 'Cadastrar munic├¡pio',
+            'titulo': 'Cadastrar município',
+            'municipio': None,
         },
     )
 
@@ -473,7 +552,8 @@ def editar_municipio(request, id):
         'monitoramento/municipios/form.html',
         {
             'form': form,
-            'titulo': 'Editar munic├¡pio',
+            'titulo': 'Editar município',
+            'municipio': municipio,
         },
     )
 
@@ -492,9 +572,9 @@ def excluir_municipio(request, id):
         'monitoramento/confirmar_exclusao_generica.html',
         {
             'objeto': municipio,
-            'titulo': 'Excluir munic├¡pio',
+            'titulo': 'Excluir município',
             'voltar_url': 'lista_municipios',
-            'tipo': 'munic├¡pio',
+            'tipo': 'município',
             'bloqueada': bloqueada,
         },
         status=400 if bloqueada else 200,
@@ -525,7 +605,7 @@ def criar_localidade(request):
     return render(
         request,
         'monitoramento/localidades/form.html',
-        {'form': form, 'titulo': 'Cadastrar localidade'}
+        {'form': form, 'titulo': 'Cadastrar localidade', 'localidade': None}
     )
 
 
@@ -545,7 +625,7 @@ def editar_localidade(request, id):
     return render(
         request,
         'monitoramento/localidades/form.html',
-        {'form': form, 'titulo': 'Editar localidade'}
+        {'form': form, 'titulo': 'Editar localidade', 'localidade': localidade}
     )
 
 
@@ -621,6 +701,7 @@ def criar_dispositivo(request):
         {
             'form': form,
             'titulo': 'Cadastrar dispositivo',
+            'dispositivo': None,
         },
     )
 
@@ -647,6 +728,7 @@ def editar_dispositivo(request, id):
         {
             'form': form,
             'titulo': 'Editar dispositivo',
+            'dispositivo': dispositivo,
         },
     )
 
@@ -678,13 +760,13 @@ def receber_leitura(request):
 
     if not token_configurado or token_recebido != token_configurado:
         return JsonResponse(
-            {'erro': 'Dispositivo n├úo autenticado.'},
+            {'erro': 'Dispositivo não autenticado.'},
             status=403,
         )
 
     if request.method != 'POST':
         return JsonResponse(
-            {'erro': 'M├®todo n├úo permitido.'},
+            {'erro': 'Método não permitido.'},
             status=405,
         )
 
@@ -695,15 +777,40 @@ def receber_leitura(request):
 
         if not 0 <= nivel <= 100:
             return JsonResponse(
-                {'erro': 'O n├¡vel deve estar entre 0 e 100.'},
+                {'erro': 'O nível deve estar entre 0 e 100.'},
                 status=400,
             )
 
         if not identificacao:
             return JsonResponse(
-                {'erro': 'Identifica├º├úo do dispositivo n├úo informada.'},
+                {'erro': 'Identificação do dispositivo não informada.'},
                 status=400,
             )
+
+        # Sensores opcionais: o campo ausente ou vazio é ignorado.
+        sensores = {}
+
+        for campo, faixa in LeituraTelemetria.CAMPOS_SENSORES.items():
+            texto = (dados.get(campo) or '').strip().replace(',', '.')
+
+            if not texto:
+                continue
+
+            try:
+                valor = float(texto)
+            except ValueError:
+                return JsonResponse(
+                    {'erro': f"O valor de {campo} é inválido."},
+                    status=400,
+                )
+
+            if not LeituraTelemetria.valor_sensor_valido(campo, valor):
+                return JsonResponse(
+                    {'erro': f"{faixa['rotulo']} fora da faixa permitida."},
+                    status=400,
+                )
+
+            sensores[campo] = valor
 
         dispositivo = (
             Dispositivo.objects
@@ -717,7 +824,7 @@ def receber_leitura(request):
 
         if not dispositivo:
             return JsonResponse(
-                {'erro': 'Dispositivo n├úo encontrado ou est├í inativo.'},
+                {'erro': 'Dispositivo não encontrado ou está inativo.'},
                 status=404,
             )
 
@@ -726,6 +833,7 @@ def receber_leitura(request):
             dispositivo=dispositivo,
             nivel=nivel,
             data_hora=timezone.now(),
+            **sensores,
         )
 
         return JsonResponse(
@@ -735,13 +843,14 @@ def receber_leitura(request):
                 'dispositivo': dispositivo.identificacao,
                 'cisterna': dispositivo.cisterna.identificacao,
                 'nivel': leitura.nivel,
+                'sensores': sensores,
             },
             status=201,
         )
 
     except (TypeError, ValueError):
         return JsonResponse(
-            {'erro': 'O n├¡vel informado ├® inv├ílido.'},
+            {'erro': 'O nível informado é inválido.'},
             status=400,
         )
 
@@ -864,3 +973,555 @@ def relatorios(request):
         'monitoramento/relatorios.html',
         contexto,
     )
+
+
+def usuario_admin_ajax(request):
+    return (
+        request.user.is_authenticated
+        and (
+            request.user.is_superuser
+            or request.user.groups.filter(
+                name='Administrador do sistema'
+            ).exists()
+        )
+    )
+
+
+@login_required
+def ajax_lista_cisternas(request):
+    cisternas = Cisterna.objects.select_related(
+        'participante',
+        'localidade',
+        'municipio',
+    ).all()
+
+    dados = []
+
+    for cisterna in cisternas:
+        dados.append({
+            'id': cisterna.id,
+            'identificacao': cisterna.identificacao,
+            'participante': str(cisterna.participante),
+            'localidade': str(cisterna.localidade),
+            'municipio': str(cisterna.municipio or ''),
+            'latitude': str(cisterna.latitude or ''),
+            'longitude': str(cisterna.longitude or ''),
+            'capacidade_total': cisterna.capacidade_total,
+            'situacao': cisterna.situacao,
+            'imagem': cisterna.imagem.url if cisterna.imagem else '',
+        })
+
+    return JsonResponse({'cisternas': dados})
+
+
+@login_required
+def ajax_criar_cisterna(request):
+    if not usuario_admin_ajax(request):
+        return JsonResponse(
+            {'mensagem': 'Você não tem permissão para cadastrar cisternas.'},
+            status=403
+        )
+
+    if request.method != 'POST':
+        return JsonResponse(
+            {'mensagem': 'Método não permitido.'},
+            status=405
+        )
+
+    form = CisternaForm(request.POST, request.FILES)
+
+    if form.is_valid():
+        cisterna = form.save()
+
+        return JsonResponse({
+            'mensagem': 'Cisterna cadastrada com sucesso!',
+            'cisterna': {
+                'id': cisterna.id,
+                'identificacao': cisterna.identificacao,
+            }
+        }, status=201)
+
+    return JsonResponse({
+        'mensagem': 'Verifique os campos do formulário.',
+        'erros': form.errors.get_json_data(),
+    }, status=400)
+
+
+@login_required
+def ajax_editar_cisterna(request, id):
+    if not usuario_admin_ajax(request):
+        return JsonResponse(
+            {'mensagem': 'Você não tem permissão para editar cisternas.'},
+            status=403
+        )
+
+    cisterna = get_object_or_404(Cisterna, id=id)
+
+    if request.method == 'GET':
+        return JsonResponse({
+            'id': cisterna.id,
+            'identificacao': cisterna.identificacao,
+            'participante': cisterna.participante_id,
+            'municipio': cisterna.municipio_id,
+            'localidade': cisterna.localidade_id,
+            'latitude': str(cisterna.latitude or ''),
+            'longitude': str(cisterna.longitude or ''),
+            'capacidade_total': cisterna.capacidade_total,
+            'situacao': cisterna.situacao,
+        })
+
+    if request.method != 'POST':
+        return JsonResponse(
+            {'mensagem': 'Método não permitido.'},
+            status=405
+        )
+
+    form = CisternaForm(
+        request.POST,
+        request.FILES,
+        instance=cisterna
+    )
+
+    if form.is_valid():
+        cisterna = form.save()
+
+        return JsonResponse({
+            'mensagem': 'Cisterna atualizada com sucesso!',
+            'cisterna': {
+                'id': cisterna.id,
+                'identificacao': cisterna.identificacao,
+            }
+        })
+
+    return JsonResponse({
+        'mensagem': 'Verifique os campos do formulário.',
+        'erros': form.errors.get_json_data(),
+    }, status=400)
+
+
+@login_required
+def ajax_excluir_cisterna(request, id):
+    if not usuario_admin_ajax(request):
+        return JsonResponse(
+            {'mensagem': 'Você não tem permissão para excluir cisternas.'},
+            status=403
+        )
+
+    if request.method != 'POST':
+        return JsonResponse(
+            {'mensagem': 'Método não permitido.'},
+            status=405
+        )
+
+    cisterna = get_object_or_404(Cisterna, id=id)
+    identificacao = cisterna.identificacao
+
+    cisterna.delete()
+
+    return JsonResponse({
+        'mensagem': f'Cisterna {identificacao} excluída com sucesso!'
+    })
+
+@login_required
+def ajax_lista_municipios(request):
+    if not usuario_admin_ajax(request):
+        return JsonResponse(
+            {'mensagem': 'Você não tem permissão para acessar municípios.'},
+            status=403
+        )
+
+    municipios = Municipio.objects.all().order_by('nome')
+
+    dados = [
+        {
+            'id': municipio.id,
+            'nome': municipio.nome,
+            'estado': municipio.estado,
+        }
+        for municipio in municipios
+    ]
+
+    return JsonResponse({'municipios': dados})
+
+
+@login_required
+def ajax_criar_municipio(request):
+    if not usuario_admin_ajax(request):
+        return JsonResponse(
+            {'mensagem': 'Você não tem permissão para cadastrar municípios.'},
+            status=403
+        )
+
+    if request.method != 'POST':
+        return JsonResponse(
+            {'mensagem': 'Método não permitido.'},
+            status=405
+        )
+
+    form = MunicipioForm(request.POST)
+
+    if form.is_valid():
+        municipio = form.save()
+
+        return JsonResponse({
+            'sucesso': True,
+            'mensagem': 'Município cadastrado com sucesso!',
+            'municipio': {
+                'id': municipio.id,
+                'nome': municipio.nome,
+                'estado': municipio.estado,
+            }
+        }, status=201)
+
+    return JsonResponse({
+        'sucesso': False,
+        'mensagem': 'Verifique os campos do formulário.',
+        'erros': form.errors.get_json_data(),
+    }, status=400)
+
+
+@login_required
+def ajax_editar_municipio(request, id):
+    if not usuario_admin_ajax(request):
+        return JsonResponse(
+            {'mensagem': 'Você não tem permissão para editar municípios.'},
+            status=403
+        )
+
+    municipio = get_object_or_404(Municipio, id=id)
+
+    if request.method == 'GET':
+        return JsonResponse({
+            'id': municipio.id,
+            'nome': municipio.nome,
+            'estado': municipio.estado,
+        })
+
+    if request.method != 'POST':
+        return JsonResponse(
+            {'mensagem': 'Método não permitido.'},
+            status=405
+        )
+
+    form = MunicipioForm(request.POST, instance=municipio)
+
+    if form.is_valid():
+        municipio = form.save()
+
+        return JsonResponse({
+            'sucesso': True,
+            'mensagem': 'Município atualizado com sucesso!',
+            'municipio': {
+                'id': municipio.id,
+                'nome': municipio.nome,
+                'estado': municipio.estado,
+            }
+        })
+
+    return JsonResponse({
+        'sucesso': False,
+        'mensagem': 'Verifique os campos do formulário.',
+        'erros': form.errors.get_json_data(),
+    }, status=400)
+
+
+@login_required
+def ajax_excluir_municipio(request, id):
+    if not usuario_admin_ajax(request):
+        return JsonResponse(
+            {'mensagem': 'Você não tem permissão para excluir municípios.'},
+            status=403
+        )
+
+    if request.method != 'POST':
+        return JsonResponse(
+            {'mensagem': 'Método não permitido.'},
+            status=405
+        )
+
+    municipio = get_object_or_404(Municipio, id=id)
+
+    if municipio.cisternas.exists():
+        return JsonResponse({
+            'sucesso': False,
+            'mensagem': 'Não é possível excluir este município porque existem cisternas vinculadas a ele.'
+        }, status=400)
+
+    nome = municipio.nome
+    municipio.delete()
+
+    return JsonResponse({
+        'sucesso': True,
+        'mensagem': f'Município {nome} excluído com sucesso!'
+    })
+
+@login_required
+def ajax_lista_localidades(request):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Sem permissão.'}, status=403)
+    localidades = Localidade.objects.order_by('nome')
+    return JsonResponse({'localidades': [
+        {'id': item.id, 'nome': item.nome, 'municipio': item.municipio,
+         'endereco': item.endereco, 'descricao': item.descricao}
+        for item in localidades
+    ]})
+
+
+@login_required
+def ajax_criar_localidade(request):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Você não tem permissão para cadastrar localidades.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'mensagem': 'Método não permitido.'}, status=405)
+    form = LocalidadeForm(request.POST)
+    if form.is_valid():
+        item = form.save()
+        return JsonResponse({'sucesso': True, 'mensagem': 'Localidade cadastrada com sucesso!',
+            'localidade': {'id': item.id, 'nome': item.nome, 'municipio': item.municipio,
+                           'endereco': item.endereco, 'descricao': item.descricao}}, status=201)
+    return JsonResponse({'mensagem': 'Verifique os campos do formulário.', 'erros': form.errors.get_json_data()}, status=400)
+
+
+@login_required
+def ajax_editar_localidade(request, id):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Você não tem permissão para editar localidades.'}, status=403)
+    item = get_object_or_404(Localidade, pk=id)
+    if request.method == 'GET':
+        return JsonResponse({'id': item.id, 'nome': item.nome, 'municipio': item.municipio,
+                             'endereco': item.endereco, 'descricao': item.descricao})
+    if request.method != 'POST':
+        return JsonResponse({'mensagem': 'Método não permitido.'}, status=405)
+    form = LocalidadeForm(request.POST, instance=item)
+    if form.is_valid():
+        item = form.save()
+        return JsonResponse({'sucesso': True, 'mensagem': 'Localidade atualizada com sucesso!',
+            'localidade': {'id': item.id, 'nome': item.nome, 'municipio': item.municipio,
+                           'endereco': item.endereco, 'descricao': item.descricao}})
+    return JsonResponse({'mensagem': 'Verifique os campos do formulário.', 'erros': form.errors.get_json_data()}, status=400)
+
+
+@login_required
+def ajax_excluir_localidade(request, id):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Você não tem permissão para excluir localidades.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'mensagem': 'Método não permitido.'}, status=405)
+    item = get_object_or_404(Localidade, pk=id)
+    if item.cisternas.exists():
+        return JsonResponse({'mensagem': 'Não é possível excluir esta localidade porque existem cisternas vinculadas.'}, status=400)
+    nome = item.nome
+    item.delete()
+    return JsonResponse({'sucesso': True, 'mensagem': f'Localidade {nome} excluída com sucesso!'})
+
+
+@login_required
+def ajax_lista_dispositivos(request):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Sem permissão.'}, status=403)
+    items = Dispositivo.objects.select_related('cisterna').order_by('identificacao')
+    return JsonResponse({'dispositivos': [
+        {'id': item.id, 'identificacao': item.identificacao, 'tipo_sensor': item.tipo_sensor,
+         'cisterna': item.cisterna_id, 'cisterna_nome': item.cisterna.identificacao,
+         'data_instalacao': item.data_instalacao.isoformat(), 'situacao': item.situacao}
+        for item in items
+    ]})
+
+
+@login_required
+def ajax_criar_dispositivo(request):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Você não tem permissão para cadastrar dispositivos.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'mensagem': 'Método não permitido.'}, status=405)
+    form = DispositivoForm(request.POST)
+    if form.is_valid():
+        item = form.save()
+        return JsonResponse({'sucesso': True, 'mensagem': 'Dispositivo cadastrado com sucesso!',
+            'dispositivo': {'id': item.id, 'identificacao': item.identificacao}}, status=201)
+    return JsonResponse({'mensagem': 'Verifique os campos do formulário.', 'erros': form.errors.get_json_data()}, status=400)
+
+
+@login_required
+def ajax_editar_dispositivo(request, id):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Você não tem permissão para editar dispositivos.'}, status=403)
+    item = get_object_or_404(Dispositivo, pk=id)
+    if request.method == 'GET':
+        return JsonResponse({'id': item.id, 'identificacao': item.identificacao, 'tipo_sensor': item.tipo_sensor,
+                             'cisterna': item.cisterna_id, 'data_instalacao': item.data_instalacao.isoformat(),
+                             'situacao': item.situacao})
+    if request.method != 'POST':
+        return JsonResponse({'mensagem': 'Método não permitido.'}, status=405)
+    form = DispositivoForm(request.POST, instance=item)
+    if form.is_valid():
+        item = form.save()
+        return JsonResponse({'sucesso': True, 'mensagem': 'Dispositivo atualizado com sucesso!',
+            'dispositivo': {'id': item.id, 'identificacao': item.identificacao}})
+    return JsonResponse({'mensagem': 'Verifique os campos do formulário.', 'erros': form.errors.get_json_data()}, status=400)
+
+
+@login_required
+def ajax_excluir_dispositivo(request, id):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Você não tem permissão para excluir dispositivos.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'mensagem': 'Método não permitido.'}, status=405)
+    item = get_object_or_404(Dispositivo, pk=id)
+    nome = item.identificacao
+    item.delete()
+    return JsonResponse({'sucesso': True, 'mensagem': f'Dispositivo {nome} excluído com sucesso!'})
+
+
+@somente_perfis('Administrador do sistema')
+def lista_participantes(request):
+    participantes = Participante.objects.order_by('nome')
+    return render(request, 'monitoramento/participantes/lista.html', {'participantes': participantes})
+
+
+@somente_perfis('Administrador do sistema')
+def criar_participante(request):
+    form = ParticipanteForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        return redirect('lista_participantes')
+    return render(request, 'monitoramento/participantes/form.html', {'form': form, 'titulo': 'Cadastrar participante', 'participante': None})
+
+
+@somente_perfis('Administrador do sistema')
+def editar_participante(request, id):
+    participante = get_object_or_404(Participante, pk=id)
+    form = ParticipanteForm(request.POST or None, instance=participante)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        return redirect('lista_participantes')
+    return render(request, 'monitoramento/participantes/form.html', {'form': form, 'titulo': 'Editar participante', 'participante': participante})
+
+
+@login_required
+def ajax_lista_participantes(request):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Sem permissão.'}, status=403)
+    return JsonResponse({'participantes': [{'id': item.id, 'nome': item.nome} for item in Participante.objects.order_by('nome')]})
+
+
+@login_required
+def ajax_criar_participante(request):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Você não tem permissão para cadastrar participantes.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'mensagem': 'Método não permitido.'}, status=405)
+    form = ParticipanteForm(request.POST)
+    if form.is_valid():
+        item = form.save()
+        return JsonResponse({'sucesso': True, 'mensagem': 'Participante cadastrado com sucesso!', 'participante': {'id': item.id, 'nome': item.nome}}, status=201)
+    return JsonResponse({'mensagem': 'Verifique os campos do formulário.', 'erros': form.errors.get_json_data()}, status=400)
+
+
+@login_required
+def ajax_editar_participante(request, id):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Você não tem permissão para editar participantes.'}, status=403)
+    item = get_object_or_404(Participante, pk=id)
+    if request.method == 'GET':
+        return JsonResponse({'id': item.id, 'nome': item.nome})
+    if request.method != 'POST':
+        return JsonResponse({'mensagem': 'Método não permitido.'}, status=405)
+    form = ParticipanteForm(request.POST, instance=item)
+    if form.is_valid():
+        item = form.save()
+        return JsonResponse({'sucesso': True, 'mensagem': 'Participante atualizado com sucesso!', 'participante': {'id': item.id, 'nome': item.nome}})
+    return JsonResponse({'mensagem': 'Verifique os campos do formulário.', 'erros': form.errors.get_json_data()}, status=400)
+
+
+@login_required
+def ajax_excluir_participante(request, id):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Você não tem permissão para excluir participantes.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'mensagem': 'Método não permitido.'}, status=405)
+    item = get_object_or_404(Participante, pk=id)
+    if item.cisternas.exists():
+        return JsonResponse({'mensagem': 'Não é possível excluir este participante porque existem cisternas vinculadas.'}, status=400)
+    nome = item.nome
+    item.delete()
+    return JsonResponse({'sucesso': True, 'mensagem': f'Participante {nome} excluído com sucesso!'})
+
+
+@login_required
+def ajax_resolver_alerta(request, id):
+    if not (request.user.is_superuser or request.user.groups.filter(name__in=['Administrador do sistema', 'Operador-técnico']).exists()):
+        return JsonResponse({'mensagem': 'Você não tem permissão para resolver alertas.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'mensagem': 'Método não permitido.'}, status=405)
+    item = get_object_or_404(Alerta, pk=id)
+    if not item.resolvido:
+        item.resolvido = True
+        item.resolvido_em = timezone.now()
+        item.save(update_fields=['resolvido', 'resolvido_em'])
+    return JsonResponse({'sucesso': True, 'mensagem': 'Alerta marcado como resolvido!'})
+
+
+@login_required
+def ajax_criar_usuario(request):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Você não tem permissão para cadastrar usuários.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'mensagem': 'Método não permitido.'}, status=405)
+    form = UsuarioForm(request.POST)
+    if form.is_valid():
+        usuario = form.save(commit=False)
+        usuario.set_password(form.cleaned_data['senha'])
+        usuario.save()
+        grupo, _ = Group.objects.get_or_create(name=form.cleaned_data['perfil'])
+        usuario.groups.clear()
+        usuario.groups.add(grupo)
+        PerfilUsuario.objects.update_or_create(usuario=usuario, defaults={'municipio': form.cleaned_data.get('municipio')})
+        return JsonResponse({'sucesso': True, 'mensagem': 'Usuário cadastrado com sucesso!', 'usuario': {'id': usuario.id, 'username': usuario.username}}, status=201)
+    return JsonResponse({'mensagem': 'Verifique os campos do formulário.', 'erros': form.errors.get_json_data()}, status=400)
+
+
+@login_required
+def ajax_editar_usuario(request, id):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Você não tem permissão para editar usuários.'}, status=403)
+    usuario = get_object_or_404(User, pk=id)
+    if usuario.is_superuser and not request.user.is_superuser:
+        return JsonResponse({'mensagem': 'Você não pode editar este usuário.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'mensagem': 'Método não permitido.'}, status=405)
+    form = UsuarioEdicaoForm(request.POST, instance=usuario)
+    if 'municipio' in form.fields:
+        form.fields['municipio'].required = False
+    if form.is_valid():
+        usuario = form.save(commit=False)
+        senha = form.cleaned_data.get('nova_senha')
+        if senha:
+            usuario.set_password(senha)
+        usuario.save()
+        grupo, _ = Group.objects.get_or_create(name=form.cleaned_data['perfil'])
+        usuario.groups.set([grupo])
+        municipio = form.cleaned_data.get('municipio')
+        if municipio is None:
+            perfil = PerfilUsuario.objects.filter(usuario=usuario).first()
+            if perfil:
+                municipio = perfil.municipio
+        PerfilUsuario.objects.update_or_create(usuario=usuario, defaults={'municipio': municipio})
+        return JsonResponse({'sucesso': True, 'mensagem': 'Usuário atualizado com sucesso!', 'usuario': {'id': usuario.id, 'username': usuario.username}})
+    return JsonResponse({'mensagem': 'Verifique os campos do formulário.', 'erros': form.errors.get_json_data()}, status=400)
+
+
+@login_required
+def ajax_excluir_usuario(request, id):
+    if not usuario_admin_ajax(request):
+        return JsonResponse({'mensagem': 'Você não tem permissão para excluir usuários.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'mensagem': 'Método não permitido.'}, status=405)
+    usuario = get_object_or_404(User, pk=id)
+    if usuario.pk == request.user.pk:
+        return JsonResponse({'mensagem': 'Você não pode excluir seu próprio usuário.'}, status=400)
+    if usuario.is_superuser and not request.user.is_superuser:
+        return JsonResponse({'mensagem': 'Você não pode excluir este usuário.'}, status=403)
+    nome = usuario.username
+    usuario.delete()
+    return JsonResponse({'sucesso': True, 'mensagem': f'Usuário {nome} excluído com sucesso!'})

@@ -4,7 +4,14 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Cisterna, Dispositivo, Localidade, Municipio, Participante
+from .models import (
+    Cisterna,
+    Dispositivo,
+    LeituraTelemetria,
+    Localidade,
+    Municipio,
+    Participante,
+)
 
 
 class SMCBaseTestCase(TestCase):
@@ -161,3 +168,121 @@ class APILeituras(SMCBaseTestCase):
             HTTP_X_DEVICE_TOKEN='smc-dev-token',
         )
         self.assertEqual(resposta.status_code, 400)
+
+
+@override_settings(
+    DEVICE_API_TOKEN='smc-dev-token',
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+)
+class SensoresDaLeitura(SMCBaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.dispositivo = Dispositivo.objects.create(
+            identificacao='SENSOR-COMPLETO',
+            tipo_sensor='Multissensor',
+            cisterna=self.cisterna,
+            data_instalacao=date(2026, 1, 1),
+            situacao='ativo',
+        )
+
+    def enviar(self, **dados):
+        payload = {'identificacao': 'SENSOR-COMPLETO', 'nivel': '80'}
+        payload.update(dados)
+        return self.client.post(
+            reverse('receber_leitura'),
+            payload,
+            HTTP_X_DEVICE_TOKEN='smc-dev-token',
+        )
+
+    def test_api_salva_todos_os_sensores(self):
+        resposta = self.enviar(
+            temperatura_agua='27.4',
+            temperatura_ar='31.2',
+            umidade_ar='58',
+            qualidade_agua_ppm='312',
+            tensao_bateria='12.6',
+            tensao_placa_solar='17.8',
+        )
+        self.assertEqual(resposta.status_code, 201)
+
+        leitura = LeituraTelemetria.objects.get()
+        self.assertEqual(leitura.temperatura_agua, 27.4)
+        self.assertEqual(leitura.temperatura_ar, 31.2)
+        self.assertEqual(leitura.umidade_ar, 58)
+        self.assertEqual(leitura.qualidade_agua_ppm, 312)
+        self.assertEqual(leitura.tensao_bateria, 12.6)
+        self.assertEqual(leitura.tensao_placa_solar, 17.8)
+
+    def test_api_continua_aceitando_leitura_so_com_nivel(self):
+        resposta = self.enviar()
+        self.assertEqual(resposta.status_code, 201)
+
+        leitura = LeituraTelemetria.objects.get()
+        self.assertIsNone(leitura.temperatura_agua)
+        self.assertIsNone(leitura.tensao_bateria)
+
+    def test_api_aceita_virgula_decimal_e_campo_vazio(self):
+        resposta = self.enviar(temperatura_agua='27,4', umidade_ar='')
+        self.assertEqual(resposta.status_code, 201)
+
+        leitura = LeituraTelemetria.objects.get()
+        self.assertEqual(leitura.temperatura_agua, 27.4)
+        self.assertIsNone(leitura.umidade_ar)
+
+    def test_api_rejeita_umidade_fora_da_faixa(self):
+        resposta = self.enviar(umidade_ar='120')
+        self.assertEqual(resposta.status_code, 400)
+        self.assertEqual(LeituraTelemetria.objects.count(), 0)
+
+    def test_api_rejeita_tensao_negativa(self):
+        resposta = self.enviar(tensao_bateria='-1')
+        self.assertEqual(resposta.status_code, 400)
+
+    def test_api_rejeita_valor_nao_numerico(self):
+        resposta = self.enviar(temperatura_ar='abc')
+        self.assertEqual(resposta.status_code, 400)
+
+    def test_api_rejeita_nan(self):
+        resposta = self.enviar(qualidade_agua_ppm='nan')
+        self.assertEqual(resposta.status_code, 400)
+
+    def test_model_rejeita_sensor_fora_da_faixa(self):
+        from django.utils import timezone
+
+        with self.assertRaises(ValueError):
+            LeituraTelemetria.objects.create(
+                cisterna=self.cisterna,
+                nivel=50,
+                data_hora=timezone.now(),
+                umidade_ar=101,
+            )
+
+    def test_monitoramento_exibe_sensores(self):
+        from django.utils import timezone
+
+        LeituraTelemetria.objects.create(
+            cisterna=self.cisterna,
+            nivel=80,
+            data_hora=timezone.now(),
+            temperatura_agua=27.4,
+            tensao_bateria=12.6,
+        )
+        self.autenticar_admin()
+        resposta = self.client.get(reverse('monitoramento'))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Temp. da água')
+        self.assertContains(resposta, '27,4')
+
+    def test_painel_inicial_exibe_resumo_dos_sensores(self):
+        from django.utils import timezone
+
+        LeituraTelemetria.objects.create(
+            cisterna=self.cisterna,
+            nivel=80,
+            data_hora=timezone.now(),
+            umidade_ar=58,
+        )
+        self.autenticar_admin()
+        resposta = self.client.get(reverse('index'))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Sensores das cisternas')

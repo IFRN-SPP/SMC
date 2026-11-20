@@ -636,6 +636,21 @@
                 max-width: none;
             }
         }
+            /* Ícones do menu lateral (SVG) */
+        .menu-item span {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .menu-item span svg {
+            width: 20px;
+            height: 20px;
+            display: block;
+            opacity: .92;
+        }
+        .menu-item.active span svg {
+            opacity: 1;
+        }
     </style>
 </head>
 
@@ -654,32 +669,32 @@
 
         <nav class="menu">
             <a href="{% url 'index' %}" class="menu-item">
-                <span>⌂</span>
+                <span><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-6h6v6"/></svg></span>
                 <p>Painel inicial</p>
             </a>
 
             <a href="{% url 'lista_usuarios' %}" class="menu-item">
-                <span>♙</span>
+                <span><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
                 <p>Usuários</p>
             </a>
 
             <a href="{% url 'lista_cisternas' %}" class="menu-item">
-                <span>▣</span>
+                <span><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg></span>
                 <p>Cisternas</p>
             </a>
 
             <a href="{% url 'monitoramento' %}" class="menu-item">
-                <span>◉</span>
+                <span><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
                 <p>Monitoramento</p>
             </a>
 
             <a href="{% url 'lista_alertas' %}" class="menu-item active">
-                <span>⚑</span>
+                <span><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
                 <p>Alertas</p>
             </a>
 
             <a href="{% url 'mapa' %}" class="menu-item">
-                <span>⌖</span>
+                <span><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15"/><path d="M15 6v15"/></svg></span>
                 <p>Mapa</p>
             </a>
 
@@ -763,7 +778,7 @@
                 <div class="alertas-lista">
                     {% for alerta in alertas %}
 
-                        <article class="alerta-card {% if alerta.resolvido %}resolvido{% endif %}">
+                        <article class="alerta-card crud-row {% if alerta.resolvido %}resolvido{% endif %}">
 
                             <div class="alerta-icone {% if alerta.resolvido %}resolvido-icone{% elif alerta.tipo == 'critico' %}critico{% endif %}">
                                 {% if alerta.resolvido %}
@@ -838,7 +853,7 @@
                                     class="alerta-resolver"
                                 >
                                     {% csrf_token %}
-                                    <button type="submit">
+                                    <button type="button" class="ajax-resolver-alerta" data-url="{% url 'ajax_resolver_alerta' alerta.id %}">
                                         ✓ Marcar como resolvido
                                     </button>
                                 </form>
@@ -872,5 +887,6 @@
     </main>
 
 </div>
+<script src="{% static 'monitoramento/js/crud_ajax.js' %}"></script>
 </body>
 </html>

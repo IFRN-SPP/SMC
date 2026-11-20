@@ -8,6 +8,7 @@ from .models import (
     Localidade,
     Municipio,
     PerfilUsuario,
+    Participante,
 )
 
 
@@ -220,6 +221,16 @@ class LocalidadeForm(forms.ModelForm):
             self.save_m2m()
 
         return localidade
+
+
+class ParticipanteForm(forms.ModelForm):
+    class Meta:
+        model = Participante
+        fields = ['nome']
+        labels = {'nome': 'Nome do participante'}
+        widgets = {
+            'nome': forms.TextInput(attrs={'placeholder': 'Nome do participante'}),
+        }
 
 class UsuarioForm(forms.ModelForm):
     senha = forms.CharField(

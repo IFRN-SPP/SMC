@@ -178,7 +178,7 @@
 
                 {% for dispositivo in dispositivos %}
 
-                <div class="cisterna-table-row">
+                <div class="cisterna-table-row crud-row">
 
                     <strong>
                         {{ dispositivo.identificacao }}
@@ -242,7 +242,7 @@
 
                     <span style="display:flex;gap:8px;align-items:center;">
                         <a href="{% url 'editar_dispositivo' dispositivo.id %}" class="btn-cancel" style="text-decoration:none;">Editar</a>
-                        <a href="{% url 'excluir_dispositivo' dispositivo.id %}" class="btn-cancel" style="text-decoration:none;color:#b91c1c;">Excluir</a>
+                        <button type="button" class="btn-cancel ajax-delete" data-url="{% url 'ajax_excluir_dispositivo' dispositivo.id %}" data-confirm="Tem certeza que deseja excluir este dispositivo?" style="color:#b91c1c;">Excluir</button>
                     </span>
 
                 </div>
@@ -268,6 +268,7 @@
 
 </div>
 
+<script src="{% static 'monitoramento/js/crud_ajax.js' %}"></script>
 </body>
 
 </html>

@@ -1,4 +1,7 @@
 
+import math
+
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -157,6 +160,90 @@ class LeituraTelemetria(models.Model):
     nivel = models.FloatField()
     data_hora = models.DateTimeField()
 
+    # Sensores adicionais. Todos são opcionais (null) porque leituras antigas,
+    # ou dispositivos que ainda não possuem o sensor, enviam apenas o nível.
+    temperatura_agua = models.FloatField(
+        'Temperatura da água (°C)',
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(-55), MaxValueValidator(125)],
+    )
+
+    temperatura_ar = models.FloatField(
+        'Temperatura do ar (°C)',
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(-55), MaxValueValidator(125)],
+    )
+
+    umidade_ar = models.FloatField(
+        'Umidade relativa do ar (%)',
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+
+    qualidade_agua_ppm = models.FloatField(
+        'Qualidade da água (ppm)',
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+    )
+
+    tensao_bateria = models.FloatField(
+        'Tensão da bateria (V)',
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+
+    tensao_placa_solar = models.FloatField(
+        'Tensão da placa solar (V)',
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+
+    # Fonte única de rótulos, unidades e faixas válidas dos sensores.
+    # É usada pela validação do save(), pela API e pelas telas do dashboard.
+    # "maximo" None significa sem limite superior.
+    CAMPOS_SENSORES = {
+        'temperatura_agua': {
+            'rotulo': 'Temperatura da água', 'curto': 'Temp. da água',
+            'unidade': '°C', 'minimo': -55, 'maximo': 125, 'casas': 1,
+        },
+        'temperatura_ar': {
+            'rotulo': 'Temperatura do ar', 'curto': 'Temp. do ar',
+            'unidade': '°C', 'minimo': -55, 'maximo': 125, 'casas': 1,
+        },
+        'umidade_ar': {
+            'rotulo': 'Umidade relativa do ar', 'curto': 'Umidade do ar',
+            'unidade': '%', 'minimo': 0, 'maximo': 100, 'casas': 0,
+        },
+        'qualidade_agua_ppm': {
+            'rotulo': 'Qualidade da água', 'curto': 'Qualidade da água',
+            'unidade': 'ppm', 'minimo': 0, 'maximo': None, 'casas': 0,
+        },
+        'tensao_bateria': {
+            'rotulo': 'Tensão da bateria', 'curto': 'Bateria',
+            'unidade': 'V', 'minimo': 0, 'maximo': 100, 'casas': 2,
+        },
+        'tensao_placa_solar': {
+            'rotulo': 'Tensão da placa solar', 'curto': 'Placa solar',
+            'unidade': 'V', 'minimo': 0, 'maximo': 100, 'casas': 2,
+        },
+    }
+
+    @classmethod
+    def valor_sensor_valido(cls, campo, valor):
+        """Diz se o valor está dentro da faixa permitida para o sensor."""
+        faixa = cls.CAMPOS_SENSORES[campo]
+
+        if not math.isfinite(valor) or valor < faixa['minimo']:
+            return False
+
+        return faixa['maximo'] is None or valor <= faixa['maximo']
+
     def __str__(self):
         return f"{self.cisterna} - {self.data_hora}"
 
@@ -165,6 +252,14 @@ class LeituraTelemetria(models.Model):
 
         if not 0 <= self.nivel <= 100:
             raise ValueError("O nível deve estar entre 0 e 100.")
+
+        for campo, faixa in self.CAMPOS_SENSORES.items():
+            valor = getattr(self, campo)
+
+            if valor is not None and not self.valor_sensor_valido(campo, valor):
+                raise ValueError(
+                    f"{faixa['rotulo']} fora da faixa permitida."
+                )
 
         leitura_anterior = None
 
