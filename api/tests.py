@@ -105,12 +105,17 @@ class ReceberLeituras(TestCase):
     def test_ignora_leitura_sem_hora_ou_sem_eco_e_aceita_o_lote(self):
         sem_hora = {**LEITURA, 'ts': None}
         sem_eco = {**LEITURA, 'ts': LEITURA['ts'] + 600, 'echo_us': None}
-        resposta = self.enviar([sem_hora, sem_eco, {**LEITURA, 'ts': LEITURA['ts'] + 1200}])
+        with self.assertLogs('api.views', level='WARNING') as logs:
+            resposta = self.enviar([sem_hora, sem_eco, {**LEITURA, 'ts': LEITURA['ts'] + 1200}])
         self.assertEqual(resposta.status_code, 200)
         self.assertEqual(resposta.json(), {'salvas': 1, 'ignoradas': 2})
+        self.assertIn('sem hora', logs.output[0])
+        self.assertIn('sem eco', logs.output[1])
 
     def test_ignora_valor_fora_da_faixa_e_aceita_o_lote(self):
-        resposta = self.enviar([{**LEITURA, 'air_rh_pct': 150}])
+        with self.assertLogs('api.views', level='WARNING') as logs:
+            resposta = self.enviar([{**LEITURA, 'air_rh_pct': 150}])
+        self.assertIn('fora da faixa', logs.output[0])
         self.assertEqual(resposta.status_code, 200)
         self.assertEqual(resposta.json(), {'salvas': 0, 'ignoradas': 1})
 

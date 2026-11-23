@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timezone
 
 from django.conf import settings
@@ -7,6 +8,8 @@ from django.views.decorators.csrf import csrf_exempt
 
 from monitoramento.models import Dispositivo, LeituraTelemetria
 
+
+logger = logging.getLogger(__name__)
 
 TEMPERATURA_PADRAO = 25.0
 
@@ -69,12 +72,14 @@ def receber_leituras(request):
     )
 
     if not dispositivo:
+        logger.warning('Dispositivo %s não encontrado ou inativo', identificacao)
         return JsonResponse(
             {'erro': 'Dispositivo não encontrado ou está inativo.'},
             status=404,
         )
 
     if not dispositivo.calibrado():
+        logger.warning('Dispositivo %s sem calibração', identificacao)
         return JsonResponse(
             {'erro': 'Dispositivo sem as distâncias de calibração.'},
             status=409,
@@ -93,7 +98,13 @@ def receber_leituras(request):
         ts = leitura.get('ts')
         echo_us = leitura.get('echo_us')
 
-        if ts is None or echo_us is None:
+        if ts is None:
+            logger.warning('%s: leitura ignorada, sem hora', identificacao)
+            ignoradas += 1
+            continue
+
+        if echo_us is None:
+            logger.warning('%s: leitura ignorada, sem eco (ts=%s)', identificacao, ts)
             ignoradas += 1
             continue
 
@@ -136,7 +147,8 @@ def receber_leituras(request):
             )
             salvas += 1
 
-        except (TypeError, ValueError, OverflowError, OSError):
+        except (TypeError, ValueError, OverflowError, OSError) as erro:
+            logger.warning('%s: leitura ignorada, %s (ts=%s)', identificacao, erro, ts)
             ignoradas += 1
 
     return JsonResponse({'salvas': salvas, 'ignoradas': ignoradas})
