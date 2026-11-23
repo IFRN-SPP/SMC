@@ -15,6 +15,9 @@ urlpatterns = [
     # Administração do Django
     path('admin/', admin.site.urls),
 
+    # API do data logger (firmware smc-firmware)
+    path('api/', include('api.urls')),
+
     # Rotas do aplicativo de monitoramento
     path('', include('monitoramento.urls')),
 
