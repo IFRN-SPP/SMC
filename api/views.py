@@ -8,6 +8,8 @@ from django.views.decorators.csrf import csrf_exempt
 
 from monitoramento.models import Dispositivo, LeituraTelemetria
 
+from .models import LeituraRecebida
+
 
 logger = logging.getLogger(__name__)
 
@@ -98,57 +100,64 @@ def receber_leituras(request):
         ts = leitura.get('ts')
         echo_us = leitura.get('echo_us')
 
+        repetida = ts is not None and LeituraRecebida.objects.filter(
+            dispositivo=identificacao,
+            ts=ts,
+        ).exists()
+
+        if repetida:
+            ignoradas += 1
+            continue
+
+        motivo = ''
+
         if ts is None:
-            logger.warning('%s: leitura ignorada, sem hora', identificacao)
-            ignoradas += 1
-            continue
+            motivo = 'sem hora'
+        elif echo_us is None:
+            motivo = 'sem eco'
+        else:
+            try:
+                temperatura_agua = leitura.get('water_temp_c')
+                temperatura = temperatura_agua
+                if temperatura is None:
+                    temperatura = TEMPERATURA_PADRAO
 
-        if echo_us is None:
-            logger.warning('%s: leitura ignorada, sem eco (ts=%s)', identificacao, ts)
-            ignoradas += 1
-            continue
+                distancia = calcular_distancia_cm(echo_us, temperatura)
 
-        try:
-            data_hora = datetime.fromtimestamp(ts, tz=timezone.utc)
+                qualidade_agua_ppm = None
+                if leitura.get('tds_mv') is not None:
+                    qualidade_agua_ppm = calcular_tds_ppm(
+                        leitura['tds_mv'], temperatura, dispositivo.fator_tds
+                    )
 
-            repetida = LeituraTelemetria.objects.filter(
-                dispositivo=dispositivo,
-                data_hora=data_hora,
-            ).exists()
-
-            if repetida:
-                ignoradas += 1
-                continue
-
-            temperatura_agua = leitura.get('water_temp_c')
-            temperatura = temperatura_agua
-            if temperatura is None:
-                temperatura = TEMPERATURA_PADRAO
-
-            distancia = calcular_distancia_cm(echo_us, temperatura)
-
-            qualidade_agua_ppm = None
-            if leitura.get('tds_mv') is not None:
-                qualidade_agua_ppm = calcular_tds_ppm(
-                    leitura['tds_mv'], temperatura, dispositivo.fator_tds
+                LeituraTelemetria.objects.create(
+                    cisterna=dispositivo.cisterna,
+                    dispositivo=dispositivo,
+                    data_hora=datetime.fromtimestamp(ts, tz=timezone.utc),
+                    nivel=calcular_nivel(distancia, dispositivo),
+                    temperatura_agua=temperatura_agua,
+                    temperatura_ar=leitura.get('air_temp_c'),
+                    umidade_ar=leitura.get('air_rh_pct'),
+                    qualidade_agua_ppm=qualidade_agua_ppm,
+                    tensao_bateria=calcular_tensao(leitura.get('battery_mv'), 2.0),
+                    tensao_placa_solar=calcular_tensao(leitura.get('solar_mv'), 3.2),
                 )
+            except (TypeError, ValueError, OverflowError, OSError) as erro:
+                motivo = str(erro)
 
-            LeituraTelemetria.objects.create(
-                cisterna=dispositivo.cisterna,
-                dispositivo=dispositivo,
-                data_hora=data_hora,
-                nivel=calcular_nivel(distancia, dispositivo),
-                temperatura_agua=temperatura_agua,
-                temperatura_ar=leitura.get('air_temp_c'),
-                umidade_ar=leitura.get('air_rh_pct'),
-                qualidade_agua_ppm=qualidade_agua_ppm,
-                tensao_bateria=calcular_tensao(leitura.get('battery_mv'), 2.0),
-                tensao_placa_solar=calcular_tensao(leitura.get('solar_mv'), 3.2),
-            )
-            salvas += 1
+        LeituraRecebida.objects.create(
+            dispositivo=identificacao,
+            ts=ts,
+            firmware=dados.get('fw') or '',
+            rssi=dados.get('rssi'),
+            dados=leitura,
+            motivo=motivo,
+        )
 
-        except (TypeError, ValueError, OverflowError, OSError) as erro:
-            logger.warning('%s: leitura ignorada, %s (ts=%s)', identificacao, erro, ts)
+        if motivo:
+            logger.warning('%s: leitura ignorada, %s (ts=%s)', identificacao, motivo, ts)
             ignoradas += 1
+        else:
+            salvas += 1
 
     return JsonResponse({'salvas': salvas, 'ignoradas': ignoradas})

@@ -4,6 +4,7 @@ from datetime import date
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from api.models import LeituraRecebida
 from monitoramento.models import (
     Cisterna,
     Dispositivo,
@@ -137,3 +138,28 @@ class ReceberLeituras(TestCase):
         self.enviar([cheia, vazia])
         self.dispositivo.cisterna.refresh_from_db()
         self.assertEqual(self.dispositivo.cisterna.situacao, 'normal')
+
+    def test_guarda_leitura_recebida_mesmo_sem_eco(self):
+        self.enviar([{**LEITURA, 'echo_us': None}])
+        self.assertEqual(LeituraTelemetria.objects.count(), 0)
+
+        recebida = LeituraRecebida.objects.get()
+        self.assertEqual(recebida.dispositivo, 'smc-a1b2c3')
+        self.assertEqual(recebida.motivo, 'sem eco')
+        self.assertEqual(recebida.rssi, -71)
+        self.assertEqual(recebida.firmware, '0.1.0')
+        self.assertEqual(recebida.dados['battery_mv'], 1990)
+
+    def test_guarda_leitura_recebida_salva_sem_motivo(self):
+        self.enviar([LEITURA])
+        self.assertEqual(LeituraRecebida.objects.get().motivo, '')
+
+    def test_nao_duplica_leitura_recebida_sem_eco(self):
+        self.enviar([{**LEITURA, 'echo_us': None}])
+        resposta = self.enviar([{**LEITURA, 'echo_us': None}])
+        self.assertEqual(resposta.json(), {'salvas': 0, 'ignoradas': 1})
+        self.assertEqual(LeituraRecebida.objects.count(), 1)
+
+    def test_dispositivo_desconhecido_nao_guarda_leitura_recebida(self):
+        self.enviar([LEITURA], device_id='smc-000000')
+        self.assertEqual(LeituraRecebida.objects.count(), 0)
