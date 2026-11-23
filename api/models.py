@@ -10,6 +10,7 @@ class LeituraRecebida(models.Model):
     firmware = models.CharField(max_length=20, blank=True)
     rssi = models.IntegerField(null=True, blank=True)
     dados = models.JSONField()
+    convertidos = models.JSONField(null=True, blank=True)
     motivo = models.CharField(max_length=255, blank=True)
 
     class Meta:

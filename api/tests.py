@@ -149,10 +149,17 @@ class ReceberLeituras(TestCase):
         self.assertEqual(recebida.rssi, -71)
         self.assertEqual(recebida.firmware, '0.1.0')
         self.assertEqual(recebida.dados['battery_mv'], 1990)
+        self.assertAlmostEqual(recebida.convertidos['tensao_bateria'], 3.98)
+        self.assertAlmostEqual(recebida.convertidos['tensao_placa_solar'], 5.792)
+        self.assertGreater(recebida.convertidos['qualidade_agua_ppm'], 0)
+        self.assertIsNone(recebida.convertidos['nivel'])
 
     def test_guarda_leitura_recebida_salva_sem_motivo(self):
         self.enviar([LEITURA])
-        self.assertEqual(LeituraRecebida.objects.get().motivo, '')
+        recebida = LeituraRecebida.objects.get()
+        self.assertEqual(recebida.motivo, '')
+        self.assertAlmostEqual(recebida.convertidos['nivel'], LeituraTelemetria.objects.get().nivel)
+        self.assertAlmostEqual(recebida.convertidos['distancia_cm'], 85.53, places=2)
 
     def test_nao_duplica_leitura_recebida_sem_eco(self):
         self.enviar([{**LEITURA, 'echo_us': None}])

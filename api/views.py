@@ -110,40 +110,53 @@ def receber_leituras(request):
             continue
 
         motivo = ''
+        convertidos = None
 
-        if ts is None:
-            motivo = 'sem hora'
-        elif echo_us is None:
-            motivo = 'sem eco'
-        else:
-            try:
-                temperatura_agua = leitura.get('water_temp_c')
-                temperatura = temperatura_agua
-                if temperatura is None:
-                    temperatura = TEMPERATURA_PADRAO
+        try:
+            temperatura_agua = leitura.get('water_temp_c')
+            temperatura = temperatura_agua
+            if temperatura is None:
+                temperatura = TEMPERATURA_PADRAO
 
+            distancia = None
+            nivel = None
+            if echo_us is not None:
                 distancia = calcular_distancia_cm(echo_us, temperatura)
+                nivel = calcular_nivel(distancia, dispositivo)
 
-                qualidade_agua_ppm = None
-                if leitura.get('tds_mv') is not None:
-                    qualidade_agua_ppm = calcular_tds_ppm(
-                        leitura['tds_mv'], temperatura, dispositivo.fator_tds
-                    )
+            qualidade_agua_ppm = None
+            if leitura.get('tds_mv') is not None:
+                qualidade_agua_ppm = calcular_tds_ppm(
+                    leitura['tds_mv'], temperatura, dispositivo.fator_tds
+                )
 
+            convertidos = {
+                'distancia_cm': distancia,
+                'nivel': nivel,
+                'qualidade_agua_ppm': qualidade_agua_ppm,
+                'tensao_bateria': calcular_tensao(leitura.get('battery_mv'), 2.0),
+                'tensao_placa_solar': calcular_tensao(leitura.get('solar_mv'), 3.2),
+            }
+
+            if ts is None:
+                motivo = 'sem hora'
+            elif echo_us is None:
+                motivo = 'sem eco'
+            else:
                 LeituraTelemetria.objects.create(
                     cisterna=dispositivo.cisterna,
                     dispositivo=dispositivo,
                     data_hora=datetime.fromtimestamp(ts, tz=timezone.utc),
-                    nivel=calcular_nivel(distancia, dispositivo),
+                    nivel=nivel,
                     temperatura_agua=temperatura_agua,
                     temperatura_ar=leitura.get('air_temp_c'),
                     umidade_ar=leitura.get('air_rh_pct'),
                     qualidade_agua_ppm=qualidade_agua_ppm,
-                    tensao_bateria=calcular_tensao(leitura.get('battery_mv'), 2.0),
-                    tensao_placa_solar=calcular_tensao(leitura.get('solar_mv'), 3.2),
+                    tensao_bateria=convertidos['tensao_bateria'],
+                    tensao_placa_solar=convertidos['tensao_placa_solar'],
                 )
-            except (TypeError, ValueError, OverflowError, OSError) as erro:
-                motivo = str(erro)
+        except (TypeError, ValueError, OverflowError, OSError) as erro:
+            motivo = str(erro)
 
         LeituraRecebida.objects.create(
             dispositivo=identificacao,
@@ -151,6 +164,7 @@ def receber_leituras(request):
             firmware=dados.get('fw') or '',
             rssi=dados.get('rssi'),
             dados=leitura,
+            convertidos=convertidos,
             motivo=motivo,
         )
 
