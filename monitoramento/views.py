@@ -1,14 +1,12 @@
 from .models import Cisterna, LeituraTelemetria
 from functools import wraps
 from django.contrib.auth import get_user_model
-from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import Group, User
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 
 from .forms import (
     CisternaForm,
@@ -751,108 +749,6 @@ def excluir_dispositivo(request, id):
             'tipo': 'dispositivo',
         },
     )
-
-
-@csrf_exempt
-def receber_leitura(request):
-    token_configurado = getattr(settings, 'DEVICE_API_TOKEN', '')
-    token_recebido = request.headers.get('X-Device-Token', '')
-
-    if not token_configurado or token_recebido != token_configurado:
-        return JsonResponse(
-            {'erro': 'Dispositivo não autenticado.'},
-            status=403,
-        )
-
-    if request.method != 'POST':
-        return JsonResponse(
-            {'erro': 'Método não permitido.'},
-            status=405,
-        )
-
-    try:
-        dados = request.POST
-        identificacao = dados.get('identificacao')
-        nivel = float(dados.get('nivel'))
-
-        if not 0 <= nivel <= 100:
-            return JsonResponse(
-                {'erro': 'O nível deve estar entre 0 e 100.'},
-                status=400,
-            )
-
-        if not identificacao:
-            return JsonResponse(
-                {'erro': 'Identificação do dispositivo não informada.'},
-                status=400,
-            )
-
-        # Sensores opcionais: o campo ausente ou vazio é ignorado.
-        sensores = {}
-
-        for campo, faixa in LeituraTelemetria.CAMPOS_SENSORES.items():
-            texto = (dados.get(campo) or '').strip().replace(',', '.')
-
-            if not texto:
-                continue
-
-            try:
-                valor = float(texto)
-            except ValueError:
-                return JsonResponse(
-                    {'erro': f"O valor de {campo} é inválido."},
-                    status=400,
-                )
-
-            if not LeituraTelemetria.valor_sensor_valido(campo, valor):
-                return JsonResponse(
-                    {'erro': f"{faixa['rotulo']} fora da faixa permitida."},
-                    status=400,
-                )
-
-            sensores[campo] = valor
-
-        dispositivo = (
-            Dispositivo.objects
-            .select_related('cisterna')
-            .filter(
-                identificacao=identificacao,
-                situacao='ativo',
-            )
-            .first()
-        )
-
-        if not dispositivo:
-            return JsonResponse(
-                {'erro': 'Dispositivo não encontrado ou está inativo.'},
-                status=404,
-            )
-
-        leitura = LeituraTelemetria.objects.create(
-            cisterna=dispositivo.cisterna,
-            dispositivo=dispositivo,
-            nivel=nivel,
-            data_hora=timezone.now(),
-            **sensores,
-        )
-
-        return JsonResponse(
-            {
-                'sucesso': True,
-                'mensagem': 'Leitura recebida com sucesso.',
-                'dispositivo': dispositivo.identificacao,
-                'cisterna': dispositivo.cisterna.identificacao,
-                'nivel': leitura.nivel,
-                'sensores': sensores,
-            },
-            status=201,
-        )
-
-    except (TypeError, ValueError):
-        return JsonResponse(
-            {'erro': 'O nível informado é inválido.'},
-            status=400,
-        )
 
 
 @login_required
