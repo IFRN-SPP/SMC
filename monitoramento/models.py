@@ -137,9 +137,6 @@ class Dispositivo(models.Model):
         default='ativo'
     )
 
-    # Calibração usada pela API do data logger (app "api") para converter os
-    # valores crus enviados pelo firmware. "identificacao" deve ser igual ao
-    # "ID do dispositivo" configurado no portal do ESP32 (ex.: smc-a1b2c3).
     distancia_vazia_cm = models.FloatField(
         'Distância do sensor ao fundo (cm)',
         null=True,
@@ -165,7 +162,6 @@ class Dispositivo(models.Model):
     )
 
     def calibrado(self):
-        """Diz se o dispositivo tem as distâncias para calcular o nível."""
         return (
             self.distancia_vazia_cm is not None
             and self.distancia_cheia_cm is not None

@@ -8,26 +8,8 @@ from django.views.decorators.csrf import csrf_exempt
 from monitoramento.models import Dispositivo, LeituraTelemetria
 
 
-# Recebe os envios do data logger (firmware em smc-firmware). Formato:
-#
-#   POST, Content-Type: application/json, Authorization: Bearer <token>
-#   {"device_id": "smc-a1b2c3", "fw": "0.1.0", "rssi": -71,
-#    "readings": [{"ts": 1759921200, "air_temp_c": 31.42, "air_rh_pct": 38.7,
-#                  "water_temp_c": 27.06, "tds_mv": 412, "echo_us": 4920,
-#                  "battery_mv": 1990, "solar_mv": 1810}, ...]}
-#
-# O firmware apaga o lote da memória quando recebe qualquer resposta 2xx.
-# Com outra resposta, guarda o lote e tenta de novo no próximo envio. Por isso:
-# - dispositivo desconhecido, inativo ou sem calibração: erro 4xx, e o ESP32
-#   guarda as leituras até o dispositivo ser cadastrado e calibrado;
-# - leitura com problema: é ignorada e o lote recebe 200. Responder com erro
-#   faria o ESP32 reenviar o mesmo lote para sempre.
-
-# Usada quando o sensor de temperatura da água não responde.
 TEMPERATURA_PADRAO = 25.0
 
-
-# Conversões dos valores crus (README do firmware, "Conversão no backend").
 
 def calcular_distancia_cm(echo_us, temperatura):
     return echo_us * (331.3 + 0.606 * temperatura) / 20000
@@ -38,7 +20,6 @@ def calcular_nivel(distancia, dispositivo):
     cheia = dispositivo.distancia_cheia_cm
     nivel = (vazia - distancia) / (vazia - cheia) * 100
 
-    # o sensor pode medir um pouco além dos limites calibrados
     if nivel < 0:
         return 0.0
     if nivel > 100:
@@ -57,6 +38,8 @@ def calcular_tensao(milivolts, divisor):
     return milivolts * divisor / 1000
 
 
+# O firmware só apaga o lote com resposta 2xx. Leituras com problema são
+# ignoradas com 200; um erro faria o ESP32 reenviar o lote para sempre.
 @csrf_exempt
 def receber_leituras(request):
     if request.method != 'POST':
@@ -97,9 +80,6 @@ def receber_leituras(request):
             status=409,
         )
 
-    # Ordena pela hora da medição, para os alertas e a situação da cisterna
-    # seguirem a sequência real. Leituras sem hora ficam no início e são
-    # ignoradas logo abaixo.
     validas = []
     for leitura in leituras:
         if isinstance(leitura, dict):
@@ -113,7 +93,6 @@ def receber_leituras(request):
         ts = leitura.get('ts')
         echo_us = leitura.get('echo_us')
 
-        # sem hora não dá para posicionar a leitura; sem eco não há nível
         if ts is None or echo_us is None:
             ignoradas += 1
             continue
@@ -121,7 +100,6 @@ def receber_leituras(request):
         try:
             data_hora = datetime.fromtimestamp(ts, tz=timezone.utc)
 
-            # o firmware pode reenviar leituras após uma queda de energia
             repetida = LeituraTelemetria.objects.filter(
                 dispositivo=dispositivo,
                 data_hora=data_hora,
@@ -159,7 +137,6 @@ def receber_leituras(request):
             salvas += 1
 
         except (TypeError, ValueError, OverflowError, OSError):
-            # valor não numérico ou fora das faixas de LeituraTelemetria
             ignoradas += 1
 
     return JsonResponse({'salvas': salvas, 'ignoradas': ignoradas})
