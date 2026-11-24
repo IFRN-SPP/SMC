@@ -1,8 +1,8 @@
+import hmac
 import json
 import logging
 from datetime import datetime, timezone
 
-from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
@@ -50,12 +50,6 @@ def receber_leituras(request):
     if request.method != 'POST':
         return JsonResponse({'erro': 'Método não permitido.'}, status=405)
 
-    token_configurado = settings.DEVICE_API_TOKEN
-    token_recebido = request.headers.get('Authorization', '')
-
-    if not token_configurado or token_recebido != f'Bearer {token_configurado}':
-        return JsonResponse({'erro': 'Dispositivo não autenticado.'}, status=401)
-
     try:
         dados = json.loads(request.body)
         identificacao = dados['device_id']
@@ -75,10 +69,14 @@ def receber_leituras(request):
 
     if not dispositivo:
         logger.warning('Dispositivo %s não encontrado ou inativo', identificacao)
-        return JsonResponse(
-            {'erro': 'Dispositivo não encontrado ou está inativo.'},
-            status=404,
-        )
+        return JsonResponse({'erro': 'Dispositivo não autenticado.'}, status=401)
+
+    token_recebido = request.headers.get('Authorization', '')
+    token_esperado = f'Bearer {dispositivo.token}'
+
+    if not hmac.compare_digest(token_recebido.encode(), token_esperado.encode()):
+        logger.warning('Dispositivo %s com token inválido', identificacao)
+        return JsonResponse({'erro': 'Dispositivo não autenticado.'}, status=401)
 
     if not dispositivo.calibrado():
         logger.warning('Dispositivo %s sem calibração', identificacao)

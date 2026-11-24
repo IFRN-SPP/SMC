@@ -135,10 +135,4 @@ LOGOUT_REDIRECT_URL = '/login/'
 PASSWORD_RESET_TIMEOUT = 3600
 
 
-DEVICE_API_TOKEN = os.environ.get(
-    'DEVICE_API_TOKEN',
-    'smc-dev-token'
-)
-
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

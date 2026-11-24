@@ -1,5 +1,6 @@
 
 import math
+import secrets
 
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -160,6 +161,18 @@ class Dispositivo(models.Model):
         validators=[MinValueValidator(0)],
         help_text='Valor real / valor calculado, com uma solução de referência.',
     )
+
+    token = models.CharField(
+        'Token de acesso',
+        max_length=64,
+        blank=True,
+        help_text='Gerado automaticamente. Apague e salve para gerar outro.',
+    )
+
+    def save(self, *args, **kwargs):
+        if not self.token:
+            self.token = secrets.token_urlsafe(24)
+        super().save(*args, **kwargs)
 
     def calibrado(self):
         return (

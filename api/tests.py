@@ -27,7 +27,6 @@ LEITURA = {
 
 
 @override_settings(
-    DEVICE_API_TOKEN='smc-dev-token',
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
 )
 class ReceberLeituras(TestCase):
@@ -46,7 +45,9 @@ class ReceberLeituras(TestCase):
             distancia_cheia_cm=20,
         )
 
-    def enviar(self, leituras, device_id='smc-a1b2c3', token='smc-dev-token'):
+    def enviar(self, leituras, device_id='smc-a1b2c3', token=None):
+        if token is None:
+            token = self.dispositivo.token
         corpo = {'device_id': device_id, 'fw': '0.1.0', 'rssi': -71, 'readings': leituras}
         return self.client.post(
             reverse('api_leituras'),
@@ -83,13 +84,38 @@ class ReceberLeituras(TestCase):
             reverse('api_leituras'),
             'nao é json',
             content_type='application/json',
-            HTTP_AUTHORIZATION='Bearer smc-dev-token',
+            HTTP_AUTHORIZATION=f'Bearer {self.dispositivo.token}',
         )
         self.assertEqual(resposta.status_code, 400)
 
-    def test_dispositivo_desconhecido_retorna_404(self):
+    def test_dispositivo_desconhecido_retorna_401(self):
         resposta = self.enviar([LEITURA], device_id='smc-000000')
-        self.assertEqual(resposta.status_code, 404)
+        self.assertEqual(resposta.status_code, 401)
+
+    def test_rejeita_token_de_outro_dispositivo(self):
+        outro = Dispositivo.objects.create(
+            identificacao='smc-d4e5f6',
+            tipo_sensor='Data logger SMC',
+            cisterna=self.dispositivo.cisterna,
+            data_instalacao=date(2026, 1, 1),
+            distancia_vazia_cm=200,
+            distancia_cheia_cm=20,
+        )
+        resposta = self.enviar([LEITURA], token=outro.token)
+        self.assertEqual(resposta.status_code, 401)
+        self.assertEqual(LeituraTelemetria.objects.count(), 0)
+
+    def test_gera_token_diferente_para_cada_dispositivo(self):
+        self.assertGreaterEqual(len(self.dispositivo.token), 32)
+        self.dispositivo.token = ''
+        antigo = Dispositivo.objects.get().token
+        self.dispositivo.save()
+        self.assertNotEqual(self.dispositivo.token, antigo)
+        self.assertNotEqual(self.dispositivo.token, '')
+
+    def test_rejeita_token_com_caracteres_especiais(self):
+        resposta = self.enviar([LEITURA], token='çãé')
+        self.assertEqual(resposta.status_code, 401)
 
     def test_dispositivo_sem_calibracao_retorna_409(self):
         self.dispositivo.distancia_vazia_cm = None
